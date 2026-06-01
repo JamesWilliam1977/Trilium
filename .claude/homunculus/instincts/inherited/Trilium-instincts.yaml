@@ -1,0 +1,571 @@
+# Instincts generated from https://github.com/JamesWilliam1977/Trilium
+# Generated: 2026-06-01T12:05:17.212Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: Trilium-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: fix, test, chore, refactor
+
+## Evidence
+
+- 18 commits analyzed
+- Detected conventional commit pattern
+- Examples: test(core): improve coverage for services, chore(server): clean up ETAPI route
+
+---
+id: Trilium-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Commit Length
+
+## Action
+
+Keep commit messages concise (~42 characters)
+
+## Evidence
+
+- Average commit message length: 42 chars
+- Based on 18 commits
+
+---
+id: Trilium-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Naming Files
+
+## Action
+
+Use camelCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: camelCase
+
+---
+id: Trilium-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: Trilium-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Export Style
+
+## Action
+
+Prefer mixed exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: mixed
+
+---
+id: Trilium-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: 
+
+---
+id: Trilium-test-framework
+trigger: "when writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Test Framework
+
+## Action
+
+Use vitest as the test framework
+
+## Evidence
+
+- Test framework detected: vitest
+- File pattern: *.spec.ts
+
+---
+id: Trilium-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Test Naming
+
+## Action
+
+Name test files using the pattern: *.spec.ts
+
+## Evidence
+
+- File pattern: *.spec.ts
+- Consistent across test files
+
+---
+id: Trilium-test-mocking
+trigger: "when mocking dependencies in tests"
+confidence: 0.75
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Test Mocking
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Mocking pattern detected: vi.mock
+- Consistent across test files
+
+---
+id: Trilium-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Test Types
+
+## Action
+
+Write unit, integration tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, integration
+- Coverage config: no
+
+---
+id: Trilium-workflow-increase-test-coverage
+trigger: "when doing increase test coverage"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Workflow Increase Test Coverage
+
+## Action
+
+Follow the increase-test-coverage workflow:
+1. Identify modules/services/utilities with low test coverage.
+2. Create or update corresponding .spec.ts files to add more tests.
+3. Sometimes update implementation files to facilitate testing or fix minor issues.
+4. Commit changes with a message indicating increased coverage.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: */src/**/*.spec.ts, */src/**/*.ts
+
+---
+id: Trilium-workflow-dependency-update
+trigger: "when doing dependency update"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Workflow Dependency Update
+
+## Action
+
+Follow the dependency-update workflow:
+1. Edit package.json to update the dependency version.
+2. Update pnpm-lock.yaml to reflect the new dependency tree.
+3. Sometimes update related test/spec files if breaking changes occur.
+4. Commit with a message referencing the dependency and new version.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: */package.json, pnpm-lock.yaml
+
+---
+id: Trilium-workflow-bugfix-with-test
+trigger: "when doing bugfix with test"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/Trilium
+---
+
+# Trilium Workflow Bugfix With Test
+
+## Action
+
+Follow the bugfix-with-test workflow:
+1. Identify and fix the bug in the implementation file (.ts or .tsx).
+2. Add or update the corresponding .spec.ts test file to cover the bug scenario.
+3. Commit both the fix and the test together.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: */src/**/*.ts, */src/**/*.tsx, */src/**/*.spec.ts
+
+---
+id: trilium-instinct-file-naming
+trigger: "When creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct File Naming
+
+## Action
+
+Name the file using camelCase
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.files
+
+---
+id: trilium-instinct-function-naming
+trigger: "When defining a function"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Function Naming
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.functions
+
+---
+id: trilium-instinct-class-naming
+trigger: "When defining a class"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Class Naming
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.classes
+
+---
+id: trilium-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Constant Naming
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.constants
+
+---
+id: trilium-instinct-import-style
+trigger: "When importing modules"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Import Style
+
+## Action
+
+Use relative import paths
+
+## Evidence
+
+- Pattern in codeStyle.importStyle
+
+---
+id: trilium-instinct-export-style
+trigger: "When exporting modules or functions"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Export Style
+
+## Action
+
+Use mixed export style (named and default as appropriate)
+
+## Evidence
+
+- Pattern in codeStyle.exportStyle
+
+---
+id: trilium-instinct-test-file-pattern
+trigger: "When creating a test file"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Test File Pattern
+
+## Action
+
+Name the file with a .spec.ts suffix
+
+## Evidence
+
+- Pattern in testing.filePattern
+- Files like test(core): improve coverage for services
+
+---
+id: trilium-instinct-test-framework
+trigger: "When writing tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Test Framework
+
+## Action
+
+Use the vitest testing framework
+
+## Evidence
+
+- Pattern in testing.framework
+
+---
+id: trilium-instinct-mocking-style
+trigger: "When mocking modules in tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Mocking Style
+
+## Action
+
+Use vi.mock for mocking
+
+## Evidence
+
+- Pattern in testing.mockingStyle
+
+---
+id: trilium-instinct-test-types
+trigger: "When designing tests"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Test Types
+
+## Action
+
+Include both unit and integration tests
+
+## Evidence
+
+- Pattern in testing.testTypes
+
+---
+id: trilium-instinct-commit-format
+trigger: "When making a git commit"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Commit Format
+
+## Action
+
+Format the commit message using conventional commits with a type prefix (fix, test, chore, refactor)
+
+## Evidence
+
+- Pattern in commits.prefixes
+- Examples like fix(server): ETAPI specs not served
+
+---
+id: trilium-instinct-commit-length
+trigger: "When writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Commit Length
+
+## Action
+
+Keep the commit message concise, around 42 characters on average
+
+## Evidence
+
+- Pattern in commits.averageLength
+
+---
+id: trilium-instinct-increase-test-coverage
+trigger: "When someone wants to improve test coverage for a module, service, or utility"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Increase Test Coverage
+
+## Action
+
+Identify low-coverage areas, add or update .spec.ts tests, possibly adjust implementation for testability, and commit with a message indicating increased coverage
+
+## Evidence
+
+- Workflow: increase-test-coverage
+- Commits like test(core): improve coverage for services
+
+---
+id: trilium-instinct-dependency-update
+trigger: "When someone wants to update a dependency to a newer version"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Dependency Update
+
+## Action
+
+Edit package.json, update pnpm-lock.yaml, adjust tests if needed, and commit referencing the dependency and version
+
+## Evidence
+
+- Workflow: dependency-update
+- Commits involving package.json and pnpm-lock.yaml
+
+---
+id: trilium-instinct-bugfix-with-test
+trigger: "When someone wants to fix a bug and ensure it is covered by tests"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: JamesWilliam1977/Trilium
+---
+
+# Trilium Instinct Bugfix With Test
+
+## Action
+
+Fix the bug in the implementation file, add or update the corresponding .spec.ts test, and commit both together
+
+## Evidence
+
+- Workflow: bugfix-with-test
+- Commits like fix(server): ETAPI specs not served with related test changes
+
