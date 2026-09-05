@@ -160,6 +160,47 @@ describe("useCollectionFilter", () => {
         expect(currentFilter?.matchedNoteIds?.has("n1")).toBe(true);
     });
 
+    it("holds while a stored query resolves, and not for one submitted afterwards", async () => {
+        const stored = deferred<ReturnType<typeof matchResponse>>();
+        searchInSubtree.mockReturnValueOnce(stored);
+        await mount({ persistedQuery: "#done" });
+
+        // Nothing may be drawn yet: the matches the board would narrow to are still unknown.
+        expect(currentFilter?.isResolvingStoredQuery).toBe(true);
+
+        await act(async () => {
+            stored.resolve(matchResponse([ "n1" ]));
+            await flushMicrotasks();
+        });
+        expect(currentFilter?.isResolvingStoredQuery).toBe(false);
+
+        // A later submit narrows a board already on screen, which must not be taken away.
+        const submitted = deferred<ReturnType<typeof matchResponse>>();
+        searchInSubtree.mockReturnValueOnce(submitted);
+        await act(async () => { currentFilter?.setQuery("#other"); });
+
+        expect(currentFilter?.isResolvingStoredQuery).toBe(false);
+        await act(async () => {
+            submitted.resolve(matchResponse([ "n2" ]));
+            await flushMicrotasks();
+        });
+    });
+
+    it("stops holding when a stored query cannot be run", async () => {
+        searchInSubtree.mockRejectedValueOnce(new Error("offline"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        await mount({ persistedQuery: "#done" });
+        await settle();
+
+        expect(currentFilter?.isResolvingStoredQuery).toBe(false);
+        expect(currentFilter?.error).toBe("collection_filter.fetch-error");
+    });
+
+    it("does not hold when nothing was stored", async () => {
+        await mount({});
+        expect(currentFilter?.isResolvingStoredQuery).toBe(false);
+    });
+
     it("keeps the previous matches when a query comes back with an error", async () => {
         searchInSubtree.mockResolvedValueOnce(matchResponse([ "n1" ]));
         await mount({});
@@ -280,6 +321,7 @@ describe("CollectionFilterInput", () => {
             matchedNoteIds: null,
             highlightedTokens: null,
             error: null,
+            isResolvingStoredQuery: false,
             setQuery: vi.fn(),
             ...overrides
         };

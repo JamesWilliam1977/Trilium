@@ -34,6 +34,11 @@ export interface CollectionFilter {
     highlightedTokens: HighlightedTokenInfo[] | null;
     /** What is wrong with the query, or null. An erroneous query keeps the previous matches. */
     error: string | null;
+    /**
+     * Whether a stored query is still being resolved, for the view to hold its first draw on. Only
+     * a stored one: a query submitted later narrows a collection that is already on screen.
+     */
+    isResolvingStoredQuery: boolean;
     setQuery: (query: string) => void;
 }
 
@@ -64,10 +69,15 @@ export function useCollectionFilter(note: FNote, {
     const [ query, setQuery ] = useState(persistedQuery ?? "");
     const [ matches, setMatches ] = useState<FilterMatches>(NO_MATCHES);
     const [ error, setError ] = useState<string | null>(null);
+    // Set before anything is drawn, so a collection opened onto a stored query waits for its
+    // matches instead of drawing every note and then taking most of them away.
+    const [ isResolvingStoredQuery, setIsResolvingStoredQuery ] =
+        useState(() => !!persistedQuery?.trim());
     // A run resolves on the server, so an older one can land after a newer one. Only the latest
     // run sets the result.
     const runSeqRef = useRef(0);
     const rerunTimerRef = useRef<number>();
+    const previousNoteIdRef = useRef(note.noteId);
     const collectionSet = useMemo(() => new Set(collectionNoteIds), [ collectionNoteIds ]);
     const collectionSetRef = useRef(collectionSet);
     collectionSetRef.current = collectionSet;
@@ -81,6 +91,7 @@ export function useCollectionFilter(note: FNote, {
             console.error("Failed to run the collection filter:", e);
             if (seq === runSeqRef.current) {
                 setError(t("collection_filter.fetch-error"));
+                setIsResolvingStoredQuery(false);
             }
             return;
         }
@@ -88,6 +99,10 @@ export function useCollectionFilter(note: FNote, {
         if (seq !== runSeqRef.current) {
             return;
         }
+
+        // The wait is over whatever the run came back with: a stored query that cannot be run must
+        // not hold the collection back from being drawn.
+        setIsResolvingStoredQuery(false);
 
         if (response.error) {
             // The previous matches stay shown: a broken query must not blank the collection.
@@ -105,6 +120,14 @@ export function useCollectionFilter(note: FNote, {
     // Adopt a query stored elsewhere: the persisted one on mount, or one another view submitted.
     useEffect(() => {
         setQuery(persistedQuery ?? "");
+
+        // Another collection brings its own stored query, and this instance is reused across them,
+        // so the wait is armed again here rather than only at mount. Not for a query submitted in
+        // this collection, which also arrives as a new `persistedQuery`.
+        if (previousNoteIdRef.current !== note.noteId) {
+            previousNoteIdRef.current = note.noteId;
+            setIsResolvingStoredQuery(!!persistedQuery?.trim());
+        }
     }, [ note.noteId, persistedQuery ]);
 
     // Resolve the submitted query, or drop the filter when it is cleared.
@@ -114,6 +137,7 @@ export function useCollectionFilter(note: FNote, {
             runSeqRef.current++;
             setError(null);
             setMatches(NO_MATCHES);
+            setIsResolvingStoredQuery(false);
             return;
         }
         run(query);
@@ -134,6 +158,7 @@ export function useCollectionFilter(note: FNote, {
         query,
         ...matches,
         error,
+        isResolvingStoredQuery,
         setQuery: (newQuery: string) => {
             const trimmed = newQuery.trim();
             setQuery(trimmed);

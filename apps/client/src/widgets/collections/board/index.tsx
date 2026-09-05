@@ -352,9 +352,13 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     });
     // The cards as drawn. Derived rather than held, so that what is shown cannot fall behind what
     // the filter matches: a card move and a search resolving in the same moment both land here.
+    // Withheld until a query stored in `board.json` has said what it matches, so a filtered board
+    // is not drawn whole and then narrowed.
     const byColumn = useMemo(
-        () => allByColumn && filterColumnMap(allByColumn, filter.matchedNoteIds),
-        [ allByColumn, filter.matchedNoteIds ]);
+        () => (allByColumn && !filter.isResolvingStoredQuery
+            ? filterColumnMap(allByColumn, filter.matchedNoteIds)
+            : undefined),
+        [ allByColumn, filter.matchedNoteIds, filter.isResolvingStoredQuery ]);
 
     if (!apiRef.current || apiRef.current.board !== boardIdentity) {
         apiRef.current = {

@@ -3426,6 +3426,62 @@ describe("Board filtering", () => {
         expect(cardTitles(0)).toEqual([ "Second", "Third" ]);
     });
 
+    /**
+     * A board opened onto a stored query draws nothing until the query has said what it matches,
+     * rather than drawing every card and then taking most of them away.
+     */
+    it("draws no cards until the stored query has resolved", async () => {
+        let resolveSearch: (response: unknown) => void = () => {};
+        searchInSubtree.mockReset();
+        searchInSubtree.mockReturnValue(
+            new Promise(resolve => { resolveSearch = resolve; }) as never);
+
+        const note = buildNote({
+            title: "Board",
+            "#collection": "",
+            "#viewType": "board",
+            children: [
+                { id: "held1", title: "First", "#status": "To Do" },
+                { id: "held2", title: "Second", "#status": "To Do" }
+            ]
+        });
+
+        host = new Component();
+        container = document.body.appendChild(document.createElement("div"));
+        await act(async () => {
+            render(
+                <ParentComponent.Provider value={host}>
+                    <Harness
+                        note={note}
+                        noteIds={[ ...note.getChildNoteIds() ]}
+                        initialConfig={{
+                            columns: [ { value: "To Do" } ],
+                            filterQuery: "#urgent"
+                        }}
+                    />
+                </ParentComponent.Provider>,
+                container
+            );
+        });
+        await act(async () => { await flush(); });
+        await act(async () => { await flush(); });
+
+        expect(container.querySelectorAll(".board-column")).toHaveLength(0);
+        expect(container.querySelectorAll(".board-note")).toHaveLength(0);
+
+        await act(async () => {
+            resolveSearch({
+                searchResultNoteIds: [ "held2" ],
+                highlightedTokens: [],
+                error: null
+            });
+            await flush();
+        });
+        await act(async () => { await flush(); });
+
+        expect(cardTitles(0)).toEqual([ "Second" ]);
+    });
+
     it("marks the matched tokens in the card titles", async () => {
         await setup({
             matched: [ "filtered1" ],
