@@ -16,6 +16,7 @@ import { ViewModeProps } from "../interface";
 import { createNewNote, createNoteForPlace, importGpxTrack, moveMarker } from "./api";
 import Buildings from "./Buildings";
 import ContextMenus from "./ContextMenus";
+import { pointPlace } from "./coordinates";
 import DetailPane, { PaneSelection } from "./DetailPane";
 import EditToolbar from "./EditToolbar";
 import GhostPin from "./GhostPin";
@@ -192,6 +193,16 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
                 .catch((e) => logError(`Fetching the boundary of "${place.label}" failed: ${e}`));
         }, OUTLINE_DELAY_MS);
     }, []);
+
+    /**
+     * Stands the map on the device's own position, as it stands on a point typed into the search bar:
+     * the coordinates under a pin, offered for keeping as a marker (see PlacePanel). Not while a click
+     * is armed to place a note, when the click means that instead.
+     */
+    const showLocation = useCallback((location: { lat: number; lng: number }) => {
+        if (placement) return;
+        pickPlace(pointPlace([ roundCoordinate(location.lng), roundCoordinate(location.lat) ]));
+    }, [ placement, pickPlace ]);
 
     /**
      * Stands the map on one of a search's results: a place under a pin of its own, or a note of the
@@ -394,7 +405,7 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
                         onAddMarker={keepPlaceAsMarker} onClose={() => pickPlace(null)}
                     />
                 </>}
-                <MapToolbar />
+                <MapToolbar onLocationClick={showLocation} />
                 <EditToolbar
                     isReadOnly={isReadOnly}
                     placing={placement?.mode === "new"}
@@ -432,6 +443,14 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
             </Map>}
         </div>
     );
+}
+
+/**
+ * A coordinate to the six decimals a place is named and stored to, which name a spot to within a
+ * stride (see `formatLocation` in Markers). A fix carries digits far beyond that.
+ */
+function roundCoordinate(value: number) {
+    return Number(value.toFixed(6));
 }
 
 /**

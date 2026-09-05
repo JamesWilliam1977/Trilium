@@ -1,7 +1,7 @@
 import "./MapToolbar.css";
 
 import clsx from "clsx";
-import { GeolocateControl, type Map as MapLibreGLMap } from "maplibre-gl";
+import { GeolocateControl, type Map as MapLibreGLMap, type MapMouseEvent } from "maplibre-gl";
 import { useCallback, useContext, useEffect, useRef, useState } from "preact/hooks";
 
 import { t } from "../../../services/i18n";
@@ -46,7 +46,22 @@ import { ParentMap, useMapPitch } from "./map";
 /** How far the button leans the view over — a lean rather than the horizon, as Google Maps takes
  *  it. Ctrl and a drag go further, all the way to MapLibre's own limit. */
 const TILTED_PITCH = 45;
-export default function MapToolbar() {
+
+interface MapToolbarProps {
+    /**
+     * A click on the dot the locate button draws for the device, handed the position the dot stands
+     * at rather than where the click landed on it (see {@link useGeolocate}).
+     */
+    onLocationClick?: (location: LngLat) => void;
+}
+
+/** A position as the Geolocation API reports one and `#geolocation` stores it. */
+interface LngLat {
+    lat: number;
+    lng: number;
+}
+
+export default function MapToolbar({ onLocationClick }: MapToolbarProps) {
     const map = useContext(ParentMap);
     // The zoom is only read for the steps' disabled state, so where the steps stay home the map is
     // not listened to for it either.
@@ -55,7 +70,7 @@ export default function MapToolbar() {
     // The map itself rather than the whole view: what is around it is the note's own chrome, and
     // everything the bar above the map offers is on the map's right-click menu as well.
     const [ isFullscreen, toggleFullscreen ] = useFullscreen(map?.getContainer());
-    const locate = useGeolocate(map);
+    const locate = useGeolocate(map, onLocationClick);
 
     if (!map) return null;
 
@@ -171,10 +186,14 @@ class HiddenGeolocateControl extends GeolocateControl {
  * corrected. A denied permission is terminal: the control clears its watch and disables its button,
  * and so does this.
  *
+ * A click on the dot is reported through `onLocationClick` with the last fix, which is where the dot
+ * stands; the click itself lands somewhere on the dot's few pixels. The accuracy circle is a marker
+ * of its own and a click on it is a click on the map (see {@link isLocationDot}).
+ *
  * Returns `null` where the button cannot work: no Geolocation API, or an insecure origin, where
  * browsers refuse the call outright.
  */
-function useGeolocate(map: MapLibreGLMap | null): Locate | null {
+function useGeolocate(map: MapLibreGLMap | null, onLocationClick?: (location: LngLat) => void): Locate | null {
     const available = canLocate();
     const control = useRef<GeolocateControl | null>(null);
     const [ state, setState ] = useState<LocateState>("off");
@@ -182,6 +201,11 @@ function useGeolocate(map: MapLibreGLMap | null): Locate | null {
     // Whether the reader has been told of the failure the watch is in; a watch reports the same
     // failure over and over, and one toast is enough for it.
     const toldOfError = useRef(false);
+    // Where the dot stands, as the last fix put it. The click handler below reads the callback
+    // through a ref as well, so a caller passing a new function does not rebuild the control.
+    const lastFix = useRef<LngLat | null>(null);
+    const onLocationClickRef = useRef(onLocationClick);
+    onLocationClickRef.current = onLocationClick;
 
     useEffect(() => {
         if (!map || !available) return;
@@ -206,7 +230,8 @@ function useGeolocate(map: MapLibreGLMap | null): Locate | null {
             toldOfError.current = false;
         });
         geolocate.on("userlocationlostfocus", () => setState("background"));
-        geolocate.on("geolocate", () => {
+        geolocate.on("geolocate", ({ coords }) => {
+            lastFix.current = { lat: coords.latitude, lng: coords.longitude };
             setHasError(false);
             toldOfError.current = false;
             setState((current) => current === "waiting" ? "following" : current);
@@ -224,8 +249,20 @@ function useGeolocate(map: MapLibreGLMap | null): Locate | null {
             }
         });
 
+        // The dot is a DOM marker in the canvas container, so a click on it reaches the map's own
+        // click event with the dot as its target.
+        const onMapClick = (e: MapMouseEvent) => {
+            const fix = lastFix.current;
+            if (fix && isLocationDot(e.originalEvent.target)) {
+                onLocationClickRef.current?.(fix);
+            }
+        };
+        map.on("click", onMapClick);
+
         return () => {
+            map.off("click", onMapClick);
             control.current = null;
+            lastFix.current = null;
             setState("off");
             setHasError(false);
             toldOfError.current = false;
@@ -247,6 +284,18 @@ function useGeolocate(map: MapLibreGLMap | null): Locate | null {
 /** Whether the Geolocation API can be asked at all: browsers refuse it on an insecure origin. */
 function canLocate() {
     return window.isSecureContext === true && !!navigator.geolocation;
+}
+
+/**
+ * Whether a click landed on the dot the locate control draws for the device's position.
+ *
+ * The dot is a DOM marker rather than a layer, so it is told by the click's target instead of by
+ * hit-testing the map; the accuracy circle around it is a marker of its own and does not count. The
+ * class is MapLibre's, from its stylesheet. Its pulse is a pseudo-element scaled to three times the
+ * dot and is kept out of the hit test by MapToolbar.css.
+ */
+export function isLocationDot(target: EventTarget | null): boolean {
+    return target instanceof Element && target.closest(".maplibregl-user-location-dot") !== null;
 }
 
 function locateTitle({ state, hasError }: Locate) {

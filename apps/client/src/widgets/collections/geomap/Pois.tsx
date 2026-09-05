@@ -7,6 +7,7 @@ import { CLUSTER_LAYERS } from "./clusters";
 import type { GeoSearchResult } from "./geocoding";
 import { trackHitLayers } from "./GpxTrack";
 import { MapStyleLoaded, ParentMap } from "./map";
+import { isLocationDot } from "./MapToolbar";
 import { MARKER_LAYER } from "./Markers";
 import { placeIcon } from "./osm_icons";
 import { PLACE_LAYER, PLACE_MARKER_COLOR } from "./PlaceMarker";
@@ -86,6 +87,9 @@ export default function Pois({ placing, onPick }: PoisProps) {
 
         const onClick = (e: MapMouseEvent) => {
             if (map.getZoom() < MIN_POI_ZOOM || isOwnUnderPointer(map, e.point)) return;
+            // The device's dot stands above the base map too, but as a DOM marker the hit test
+            // cannot see; a click on it is the dot's (see useGeolocate in MapToolbar).
+            if (isLocationDot(e.originalEvent.target)) return;
 
             const layers = poiLayers(map);
             if (!layers.length) return;

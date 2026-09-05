@@ -9,6 +9,8 @@
  * not gone looking for the coordinates at all.
  */
 
+import type { GeoSearchResult } from "./geocoding";
+
 /** How far north or south a point can stand, and how far east or west. */
 const MAX_LATITUDE = 90;
 const MAX_LONGITUDE = 180;
@@ -68,6 +70,34 @@ export function parseCoordinates(query: string): [number, number] | null {
  */
 export function formatCoordinates([ lng, lat ]: [number, number]) {
     return `${lat}, ${lng}`;
+}
+
+/**
+ * How close a point named by its coordinates is shown. Nearer than the level a place of unsaid
+ * extent is given: coordinates name one spot rather than the town around it.
+ */
+export const POINT_ZOOM = 16;
+
+/**
+ * A bare point as a place, like any the geocoder answers with, so that standing the map on it pins
+ * it and offers it for keeping exactly as a searched place is (see PlacePanel). It has no name of
+ * its own, which is why it is named by its coordinates and marked `unnamed`.
+ *
+ * Serves the point typed into the search bar and the dot the locate button draws for the device.
+ */
+export function pointPlace(center: [number, number]): GeoSearchResult {
+    const [ lng, lat ] = center;
+    const coordinates = formatCoordinates(center);
+
+    return {
+        id: `point:${lng},${lat}`,
+        name: coordinates,
+        label: coordinates,
+        lat,
+        lng,
+        zoom: POINT_ZOOM,
+        unnamed: true
+    };
 }
 
 /** The corners of a box, as `fitBounds` wants them: south-west first, north-east second. */

@@ -6,7 +6,7 @@
  * back.
  */
 import { GeolocateControl, type Map as MapLibreGLMap } from "maplibre-gl";
-import { render } from "preact";
+import { type ComponentProps, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -29,10 +29,12 @@ const LOCATE = 3;
 const FULLSCREEN = 4;
 
 /** A map that zooms and tilts, says so, and stands somewhere — all these controls ask of one. */
+type Listener = (payload?: unknown) => void;
+
 function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
-    const listeners = new Map<string, Set<() => void>>();
-    const fire = (event: string) => {
-        for (const listener of listeners.get(event) ?? []) listener();
+    const listeners = new Map<string, Set<Listener>>();
+    const fire = (event: string, payload?: unknown) => {
+        for (const listener of listeners.get(event) ?? []) listener(payload);
     };
     const container = document.createElement("div");
     container.requestFullscreen = vi.fn(async () => {});
@@ -55,6 +57,8 @@ function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
         hasControl: (control: unknown) => controls.has(control),
         /** The map being torn down, as `map.remove()` does before any cleanup around it runs. */
         remove: () => controls.clear(),
+        /** A click on the map, landing on the element given — as MapLibre reports one on a marker. */
+        click: (target: Element | null) => fire("click", { originalEvent: { target }, point: { x: 0, y: 0 } }),
         getZoom: () => zoom,
         getMinZoom: () => minZoom,
         getMaxZoom: () => maxZoom,
@@ -69,10 +73,10 @@ function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
         easeTo: vi.fn(({ pitch: leanedTo }: { pitch?: number }) => {
             if (leanedTo !== undefined) setPitch(leanedTo);
         }),
-        on: (event: string, listener: () => void) => {
+        on: (event: string, listener: Listener) => {
             listeners.set(event, (listeners.get(event) ?? new Set()).add(listener));
         },
-        off: (event: string, listener: () => void) => { listeners.get(event)?.delete(listener); },
+        off: (event: string, listener: Listener) => { listeners.get(event)?.delete(listener); },
         get listenerCount() {
             let count = 0;
             for (const held of listeners.values()) count += held.size;
@@ -104,12 +108,12 @@ afterEach(() => {
 });
 
 /** Builds the controls over a map and settles them, so they are listening before being spoken to. */
-function renderToolbar(map: ReturnType<typeof fakeMap> | null) {
+function renderToolbar(map: ReturnType<typeof fakeMap> | null, props: ComponentProps<typeof MapToolbar> = {}) {
     let container: HTMLElement | undefined;
     act(() => {
         container = renderInto(
             <ParentMap.Provider value={map as unknown as MapLibreGLMap}>
-                <MapToolbar />
+                <MapToolbar {...props} />
             </ParentMap.Provider>
         );
     });
@@ -299,6 +303,32 @@ describe("geo map MapToolbar", () => {
         expect(showError).toHaveBeenLastCalledWith("geo-map.location-denied");
     });
 
+    it("tells a click on the device's dot from one on its accuracy circle, and hands over the fix", () => {
+        const map = fakeMap();
+        const onLocationClick = vi.fn();
+        renderToolbar(map, { onLocationClick });
+        const control = controlOn(map);
+        // The two markers the control draws, as MapLibre's stylesheet names them.
+        const dot = document.createElement("div");
+        dot.className = "maplibregl-marker maplibregl-user-location-dot";
+        const circle = document.createElement("div");
+        circle.className = "maplibregl-marker maplibregl-user-location-accuracy-circle";
+
+        // No fix yet, so nothing stands where a click could land on it.
+        act(() => { map.click(dot); });
+        expect(onLocationClick).not.toHaveBeenCalled();
+
+        act(() => { control.fire("geolocate", { coords: { latitude: 45.9432, longitude: 24.9668 }, timestamp: 0 }); });
+        act(() => { map.click(circle); });
+        act(() => { map.click(null); });
+        expect(onLocationClick).not.toHaveBeenCalled();
+
+        // Where the dot stands rather than where on it the click fell.
+        act(() => { map.click(dot); });
+        expect(onLocationClick).toHaveBeenCalledTimes(1);
+        expect(onLocationClick).toHaveBeenCalledWith({ lat: 45.9432, lng: 24.9668 });
+    });
+
     it("keeps the locate button off a map that cannot ask where the device is", () => {
         // What a browser says of a page served over plain HTTP, where the Geolocation API refuses.
         Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
@@ -371,8 +401,8 @@ describe("geo map MapToolbar", () => {
     it("stops listening to a map it is taken off", () => {
         const map = fakeMap();
         const container = renderToolbar(map);
-        // One listener for the zoom, one for the pitch.
-        expect(map.listenerCount).toBe(2);
+        // One listener for the zoom, one for the pitch, one for a click on the device's dot.
+        expect(map.listenerCount).toBe(3);
 
         // A map torn down under controls that stayed behind would go on being reported to.
         act(() => { render(null, container); });

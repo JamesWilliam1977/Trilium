@@ -56,6 +56,8 @@ The map then moves to where the device is and marks it with a blue dot. A lighte
 
 Dragging the map stops it from following. The dot stays and keeps moving, and pressing the button again brings the map back to it. Pressing the button while the map is following turns the dot off.
 
+Click the dot to see its coordinates in the panel a searched place is shown in. From there the position can be kept as a marker (see _Keeping a place as a marker_). Clicking the lighter circle around the dot is a click on the map.
+
 If the position cannot be found, a message says so and the button keeps waiting for one; press it again to stop. If you refuse the permission, the button is disabled until the map is opened again. To allow it after all, change the permission for Trilium in the browser or in the system's location settings.
 
 Your position is not stored in the note and is not sent anywhere. The map does remember where you left it, as it does after any other movement, so a map you have taken to your location opens there the next time.

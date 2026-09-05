@@ -21,3 +21,10 @@
     }
 }
 
+/* The pulse around the device's dot is a pseudo-element scaled to three times the dot, and a
+   pseudo-element is hit-tested whatever its opacity: a click on the fading ring would otherwise
+   count as a click on the dot (see isLocationDot in MapToolbar.tsx). */
+.geo-map-container .maplibregl-user-location-dot::before {
+    pointer-events: none;
+}
+
