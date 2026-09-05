@@ -44,10 +44,7 @@ export function applyCardMove(
 
 /**
  * The columns with only the cards in `matchedNoteIds`, keeping their order relative to each other.
- *
- * A filter narrows what is drawn, nothing else: every column stays, and the full map is what column
- * discovery, the config write-back and bulk operations keep reading, so filtering cannot rewrite
- * the board's columns or reach fewer cards than an operation means to.
+ * Every column is kept, since a filter narrows what is drawn and nothing else.
  */
 export function filterColumnMap(
     byColumn: ColumnMap, matchedNoteIds: Set<string> | null
@@ -65,10 +62,6 @@ export function filterColumnMap(
 
 /**
  * Where a card dropped among the cards on screen goes in the full column.
- *
- * A drop is measured against the cards a filter leaves showing, and the move is written against the
- * visible card it was dropped before. That card decides the place in the full column too, so the
- * cards a filter hides keep their order around it.
  *
  * @param shown the target column as it is drawn, counting the moved card where it stays in place.
  * @param all the same column with every card it holds.

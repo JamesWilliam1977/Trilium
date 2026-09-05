@@ -201,9 +201,8 @@ export const BoardDragStateContext = createContext<BoardDragState>({
 });
 
 /**
- * The tokens the active filter matched by, which the cards highlight in their titles. Null while
- * no filter is active. A context for the same reason the promoted attributes use one: a card is
- * memoized, and the tokens change only when a query is submitted.
+ * The tokens the active filter matched by, which the cards highlight in their titles. A context
+ * rather than a prop, so a memoized card is not redrawn for it during a drag.
  */
 export const BoardHighlightTokensContext = createContext<HighlightedTokenInfo[] | null>(null);
 
@@ -350,10 +349,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         onQueryChanged: persistFilterQuery,
         collectionNoteIds: noteIds
     });
-    // The cards as drawn. Derived rather than held, so that what is shown cannot fall behind what
-    // the filter matches: a card move and a search resolving in the same moment both land here.
-    // Withheld until a query stored in `board.json` has said what it matches, so a filtered board
-    // is not drawn whole and then narrowed.
+    // The cards as drawn. Derived rather than held, so what is shown cannot fall behind what the
+    // filter matches, and withheld until a query stored in `board.json` has said what it matches.
     const byColumn = useMemo(
         () => (allByColumn && !filter.isResolvingStoredQuery
             ? filterColumnMap(allByColumn, filter.matchedNoteIds)

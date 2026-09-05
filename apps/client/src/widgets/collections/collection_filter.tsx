@@ -51,10 +51,7 @@ const NO_MATCHES: FilterMatches = { matchedNoteIds: null, highlightedTokens: nul
 
 /**
  * Narrows a collection to the notes matching a search query, using the full search syntax.
- *
- * The result is a membership set, not an order: a view keeps its own enumeration and leaves out
- * the notes the set does not name. A search result is a snapshot, so an active filter re-runs
- * when an entity change touches the collection.
+ * The result is a membership set, not an order: a view keeps its own enumeration.
  */
 export function useCollectionFilter(note: FNote, {
     persistedQuery, onQueryChanged, collectionNoteIds
@@ -121,9 +118,8 @@ export function useCollectionFilter(note: FNote, {
     useEffect(() => {
         setQuery(persistedQuery ?? "");
 
-        // Another collection brings its own stored query, and this instance is reused across them,
-        // so the wait is armed again here rather than only at mount. Not for a query submitted in
-        // this collection, which also arrives as a new `persistedQuery`.
+        // A different collection brings its own stored query, so the wait is armed again for it.
+        // Not for a query submitted here, which also arrives as a new `persistedQuery`.
         if (previousNoteIdRef.current !== note.noteId) {
             previousNoteIdRef.current = note.noteId;
             setIsResolvingStoredQuery(!!persistedQuery?.trim());
@@ -168,11 +164,8 @@ export function useCollectionFilter(note: FNote, {
 }
 
 /**
- * The filter box for a collection header, styled after the quick search box. Enter or the search
- * button submits what is typed, and the clear button beside it drops the filter.
- *
- * What is typed is held here until it is submitted, so an unrelated redraw cannot apply a
- * half-typed query.
+ * The filter box for a collection header. Enter or the search button submits what is typed, which
+ * is held here until then so an unrelated redraw cannot apply a half-typed query.
  */
 export function CollectionFilterInput({ filter, placeholder }: {
     filter: CollectionFilter;
@@ -194,6 +187,9 @@ export function CollectionFilterInput({ filter, placeholder }: {
                 inputRef={inputRef}
                 currentValue={typed}
                 placeholder={placeholder ?? t("collection_filter.placeholder")}
+                // The tooltip opens on hover alone, so it cannot carry the name to a reader who
+                // arrives by keyboard.
+                aria-label={placeholder ?? t("collection_filter.placeholder")}
                 onChange={setTyped}
                 onKeyDown={(e: KeyboardEvent) => {
                     if (e.key === "Enter") {

@@ -393,6 +393,12 @@ describe("CollectionFilterInput", () => {
         expect(container.querySelector(".collection-filter")?.classList.contains("active")).toBe(true);
     });
 
+    // The tooltip opens on hover alone, so the name has to be on the element itself.
+    it("names the box for assistive technology", () => {
+        const { input } = mountInput();
+        expect(input.getAttribute("aria-label")).toBe("collection_filter.placeholder");
+    });
+
     it("shows the query error under the box", () => {
         mountInput({ error: "broken" });
         expect(container.querySelector(".collection-filter-error")?.textContent).toBe("broken");
