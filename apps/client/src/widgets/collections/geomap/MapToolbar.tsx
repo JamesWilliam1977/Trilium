@@ -1,6 +1,6 @@
 import "./MapToolbar.css";
 
-import type { Map as MapLibreGLMap } from "maplibre-gl";
+import { GeolocateControl, type Map as MapLibreGLMap } from "maplibre-gl";
 import { useContext, useEffect, useState } from "preact/hooks";
 
 import { t } from "../../../services/i18n";
@@ -49,6 +49,7 @@ export default function MapToolbar() {
     // The map itself rather than the whole view: what is around it is the note's own chrome, and
     // everything the bar above the map offers is on the map's right-click menu as well.
     const [ isFullscreen, toggleFullscreen ] = useFullscreen(map?.getContainer());
+    useGeolocateControl(map);
 
     if (!map) return null;
 
@@ -112,4 +113,31 @@ function useMapZoom(map: MapLibreGLMap | null) {
     }, [ map ]);
 
     return zoom;
+}
+
+/**
+ * Stands MapLibre's own locate button on the map, in the corner above this group (see
+ * MapToolbar.css for the lift).
+ *
+ * With `trackUserLocation` the button is a toggle: the first press asks the browser for the device's
+ * position, frames it and follows it as it changes; dragging the map keeps the dot but frees the
+ * camera; a second press turns the watch off and takes the dot away. The control draws the dot and
+ * its accuracy circle itself, as DOM markers over the canvas, so nothing here survives a style
+ * switch only by being carried across (see `keepAdditions` in map.tsx).
+ */
+function useGeolocateControl(map: MapLibreGLMap | null) {
+    useEffect(() => {
+        if (!map) return;
+
+        const control = new GeolocateControl({ trackUserLocation: true });
+        map.addControl(control, "bottom-right");
+
+        return () => {
+            // A map being removed lets go of its controls first, and MapLibre's `removeControl`
+            // throws for one the map no longer holds (see the scale control in map.tsx).
+            if (map.hasControl(control)) {
+                map.removeControl(control);
+            }
+        };
+    }, [ map ]);
 }

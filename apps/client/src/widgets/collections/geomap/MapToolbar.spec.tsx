@@ -5,7 +5,7 @@
  * allowed being refused rather than merely doing nothing, and the screen being given and taken
  * back.
  */
-import type { Map as MapLibreGLMap } from "maplibre-gl";
+import { GeolocateControl, type Map as MapLibreGLMap } from "maplibre-gl";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,8 +39,15 @@ function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
         pitch = value;
         fire("pitch");
     };
+    /** The controls the map holds, which a map being removed lets go of on its own. */
+    const controls = new Set<unknown>();
 
     return {
+        addControl: vi.fn((control: unknown, _position?: string) => { controls.add(control); }),
+        removeControl: vi.fn((control: unknown) => { controls.delete(control); }),
+        hasControl: (control: unknown) => controls.has(control),
+        /** The map being torn down, as `map.remove()` does before any cleanup around it runs. */
+        remove: () => controls.clear(),
         getZoom: () => zoom,
         getMinZoom: () => minZoom,
         getMaxZoom: () => maxZoom,
@@ -160,6 +167,30 @@ describe("geo map MapToolbar", () => {
         const container = renderToolbar(null);
 
         expect(buttons(container)).toHaveLength(0);
+    });
+
+    it("stands MapLibre's locate button on the map, set to follow the device, and takes it off again", () => {
+        const map = fakeMap();
+        const container = renderToolbar(map);
+
+        expect(map.addControl).toHaveBeenCalledTimes(1);
+        const [ control, position ] = map.addControl.mock.calls[0];
+        expect(control).toBeInstanceOf(GeolocateControl);
+        // A toggle that follows the device rather than a button that flies there once.
+        expect((control as GeolocateControl).options.trackUserLocation).toBe(true);
+        // The corner this group stands in, lifted above it (see MapToolbar.css).
+        expect(position).toBe("bottom-right");
+
+        act(() => { render(null, container); });
+        expect(map.removeControl).toHaveBeenCalledWith(control);
+
+        // A map torn down first has let go of the control already, and is not asked to again —
+        // MapLibre throws for a control it no longer holds.
+        const torn = fakeMap();
+        const second = renderToolbar(torn);
+        torn.remove();
+        act(() => { render(null, second); });
+        expect(torn.removeControl).not.toHaveBeenCalled();
     });
 
     it("zooms the map in either direction", () => {
