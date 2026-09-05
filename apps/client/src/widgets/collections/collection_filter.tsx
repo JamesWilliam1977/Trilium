@@ -12,7 +12,7 @@ import ActionButton from "../react/ActionButton";
 import FormTextBox from "../react/FormTextBox";
 import { useTriliumEvent } from "../react/hooks";
 
-/** How long changes are left to settle before the active filter is re-run over them. */
+/** How long to wait after a change before re-running the active filter. */
 const RERUN_DEBOUNCE_MS = 300;
 
 export interface CollectionFilter {
@@ -37,10 +37,9 @@ const NO_MATCHES: FilterMatches = { matchedNoteIds: null, highlightedTokens: nul
 /**
  * Narrows a collection to the notes matching a search query, using the full search syntax.
  *
- * The query runs server-side, scoped to the collection's subtree, and the result is a membership
- * set: the view keeps its own enumeration and order and only leaves out the notes not in the set.
- * Search results are a snapshot, so while a filter is active it is re-run (debounced) whenever an
- * entity change touches the collection.
+ * The result is a membership set, not an order: a view keeps its own enumeration and leaves out
+ * the notes the set does not name. A search result is a snapshot, so an active filter re-runs
+ * when an entity change touches the collection.
  */
 export function useCollectionFilter(note: FNote, {
     persistedQuery, onQueryChanged, collectionNoteIds
@@ -55,8 +54,8 @@ export function useCollectionFilter(note: FNote, {
     const [ query, setQuery ] = useState(persistedQuery ?? "");
     const [ matches, setMatches ] = useState<FilterMatches>(NO_MATCHES);
     const [ error, setError ] = useState<string | null>(null);
-    // Runs resolve on the server, so an older one can land after a newer one; only the latest run
-    // is allowed to set the result.
+    // A run resolves on the server, so an older one can land after a newer one. Only the latest
+    // run sets the result.
     const runSeqRef = useRef(0);
     const rerunTimerRef = useRef<number>();
     const collectionSet = useMemo(() => new Set(collectionNoteIds), [ collectionNoteIds ]);
@@ -111,7 +110,8 @@ export function useCollectionFilter(note: FNote, {
     }, [ note.noteId, query ]);
 
     useTriliumEvent("entitiesReloaded", ({ loadResults }) => {
-        if (!query.trim() || !touchesCollection(loadResults, collectionSetRef.current, note.noteId)) {
+        const collection = collectionSetRef.current;
+        if (!query.trim() || !touchesCollection(loadResults, collection, note.noteId)) {
             return;
         }
         window.clearTimeout(rerunTimerRef.current);
@@ -133,9 +133,10 @@ export function useCollectionFilter(note: FNote, {
 }
 
 /**
- * The filter box a collection header shows: Enter submits what is typed, the button or an emptied
- * box clears the filter, and a query error is shown under the box. What is typed but not submitted
- * is local to the box, so an unrelated redraw does not apply a half-typed query.
+ * The filter box for a collection header. Enter submits what is typed and the button clears it.
+ *
+ * What is typed is held here until it is submitted, so an unrelated redraw cannot apply a
+ * half-typed query.
  */
 export function CollectionFilterInput({ filter }: { filter: CollectionFilter }) {
     const [ typed, setTyped ] = useState(filter.query);
@@ -159,8 +160,8 @@ export function CollectionFilterInput({ filter }: { filter: CollectionFilter }) 
                         e.preventDefault();
                         filter.setQuery(typed);
                     } else if (e.key === "Escape" && typed !== filter.query) {
-                        // Give up what was typed, keeping the submitted query; a second Escape is
-                        // left for whatever the view does with it.
+                        // Drops what was typed and keeps the submitted query. A second Escape
+                        // reaches the view, which handles it as usual.
                         e.stopPropagation();
                         setTyped(filter.query);
                     }

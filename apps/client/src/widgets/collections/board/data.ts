@@ -47,7 +47,9 @@ export function applyCardMove(
  * discovery, the config write-back and bulk operations keep reading, so filtering cannot rewrite
  * the board's columns or reach fewer cards than an operation means to.
  */
-export function filterColumnMap(byColumn: ColumnMap, matchedNoteIds: Set<string> | null): ColumnMap {
+export function filterColumnMap(
+    byColumn: ColumnMap, matchedNoteIds: Set<string> | null
+): ColumnMap {
     if (!matchedNoteIds) {
         return byColumn;
     }

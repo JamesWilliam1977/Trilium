@@ -3331,10 +3331,10 @@ describe("Board filtering", () => {
             "#collection": "",
             "#viewType": "board",
             children: [
-                { id: "card1", title: "First", "#status": "To Do" },
-                { id: "card2", title: "Second", "#status": "To Do" },
-                { id: "card3", title: "Third", "#status": "To Do" },
-                { id: "card4", title: "Fourth", "#status": "Done" }
+                { id: "filtered1", title: "First", "#status": "To Do" },
+                { id: "filtered2", title: "Second", "#status": "To Do" },
+                { id: "filtered3", title: "Third", "#status": "To Do" },
+                { id: "filtered4", title: "Fourth", "#status": "Done" }
             ]
         });
 
@@ -3369,11 +3369,8 @@ describe("Board filtering", () => {
 
     it("shows only the matched cards, in their own order, keeping every column", async () => {
         // The matches arrive in score order; the board must keep branch order regardless.
-        const note = await setup({ matched: [ "card3", "card1" ] });
+        const note = await setup({ matched: [ "filtered3", "filtered1" ] });
 
-        console.log("CALLS", searchInSubtree.mock.calls.length,
-            JSON.stringify(searchInSubtree.mock.calls));
-        console.log("COL0", [ ...container.querySelectorAll(".board-column") ][0]?.innerHTML);
         expect(searchInSubtree).toHaveBeenCalledWith("#urgent", note.noteId);
         expect(cardTitles(0)).toEqual([ "First", "Third" ]);
         expect(cardTitles(1)).toEqual([]);
@@ -3381,7 +3378,7 @@ describe("Board filtering", () => {
     });
 
     it("counts the visible cards in the badge while the limit reads the real column", async () => {
-        await setup({ matched: [ "card1" ], limit: 2 });
+        await setup({ matched: [ "filtered1" ], limit: 2 });
 
         const column = container.querySelector(".board-column");
         // One of three cards is shown, and three stand against the limit of two.
@@ -3391,7 +3388,7 @@ describe("Board filtering", () => {
 
     it("marks the matched tokens in the card titles", async () => {
         await setup({
-            matched: [ "card1" ],
+            matched: [ "filtered1" ],
             tokens: [ { token: "First", type: "plain" } ]
         });
 

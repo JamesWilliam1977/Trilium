@@ -1,4 +1,7 @@
-import { dayjs, type SearchResultDetails, type SearchResultDetailsRequest, type SearchResultDetailsResponse, type SearchWithTokensResponse, type TemplatesResponse } from "@triliumnext/commons";
+import {
+    dayjs, type SearchResultDetails, type SearchResultDetailsRequest,
+    type SearchResultDetailsResponse, type SearchWithTokensResponse, type TemplatesResponse
+} from "@triliumnext/commons";
 import type { Request } from "express";
 
 import becca from "../../becca/becca.js";
@@ -146,12 +149,13 @@ function search(
         includeArchivedNotes: true,
         fuzzyAttributeSearch: false,
         ignoreHoistedNote: true,
-        // Restricts the results to one subtree, for callers that filter a collection rather than
-        // search the whole tree.
-        ancestorNoteId: typeof ancestorNoteId === "string" && ancestorNoteId ? ancestorNoteId : undefined
+        // Restricts the results to one subtree, for callers that filter a collection rather
+        // than search the whole tree.
+        ancestorNoteId: ancestorNoteId || undefined
     });
 
-    const noteIds = searchService.findResultsWithQuery(searchString, searchContext).map((sr) => sr.noteId);
+    const noteIds = searchService.findResultsWithQuery(searchString, searchContext)
+        .map((sr) => sr.noteId);
 
     if (includeTokens !== "true") {
         return noteIds;
