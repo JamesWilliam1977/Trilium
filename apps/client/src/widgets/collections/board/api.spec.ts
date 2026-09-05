@@ -68,7 +68,8 @@ function createApi(
     columns: string[],
     parentNote?: FNote,
     statusAttribute = "status",
-    byColumn: ColumnMap = new Map()
+    byColumn: ColumnMap = new Map(),
+    allByColumn?: ColumnMap
 ) {
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
@@ -84,10 +85,61 @@ function createApi(
         (newConfig) => saved.push(newConfig),
         (branchId) => editing.push(branchId),
         pending,
-        getStatusDefinition(board, statusAttribute)
+        getStatusDefinition(board, statusAttribute),
+        allByColumn
     );
     return { api, board, saved, editing, pendingRenames: pending.renames };
 }
+
+describe("BoardApi filtering", () => {
+    /** Cards named by their note id, which is all the operations under test read them for. */
+    function cards(columns: Record<string, string[]>): ColumnMap {
+        return new Map(Object.entries(columns).map(([ column, ids ]) => [
+            column,
+            ids.map((noteId) => ({ note: { noteId }, branch: { branchId: `b_${noteId}` } }))
+        ])) as unknown as ColumnMap;
+    }
+
+    it("stores a submitted filter query and clears it for an empty one", () => {
+        const { api, saved } = createApi({ filterQuery: undefined }, []);
+
+        api.setFilterQuery("#done");
+        expect(saved.at(-1)?.filterQuery).toBe("#done");
+
+        api.setFilterQuery("#done");
+        expect(saved).toHaveLength(1);
+
+        api.setFilterQuery("");
+        expect(saved).toHaveLength(2);
+        expect(saved.at(-1)?.filterQuery).toBeUndefined();
+    });
+
+    it("does not save for a cleared filter that was never set", () => {
+        const { api, saved } = createApi({}, []);
+
+        api.setFilterQuery("");
+        expect(saved).toHaveLength(0);
+    });
+
+    it("removes a column's value from the cards the filter is not showing too", async () => {
+        const { api } = createApi(
+            { columns: [ { value: "To Do" } ] },
+            [ "To Do" ],
+            undefined,
+            "status",
+            cards({ "To Do": [ "visible" ] }),
+            cards({ "To Do": [ "visible", "hidden" ] })
+        );
+
+        await api.removeColumn("To Do");
+
+        expect(executeBulkActions).toHaveBeenCalledWith(
+            [ "visible", "hidden" ],
+            [ { name: "deleteLabel", labelName: "status" } ],
+            { silent: true }
+        );
+    });
+});
 
 describe("BoardApi column mutations", () => {
     /**

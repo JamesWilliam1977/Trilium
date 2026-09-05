@@ -5,7 +5,9 @@ import {
 import FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import BoardApi from "./api";
-import { BoardActionsContext, BoardPromotedAttributesContext, TitleEditor } from ".";
+import {
+    BoardActionsContext, BoardHighlightTokensContext, BoardPromotedAttributesContext, TitleEditor
+} from ".";
 import { ContextMenuEvent } from "../../../menus/context_menu";
 import { openNoteContextMenu } from "./context_menu";
 import { t } from "../../../services/i18n";
@@ -15,6 +17,7 @@ import { FLIP_SETTLE_MS } from "../../react/flip";
 import {
     useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useTriliumEvent
 } from "../../react/hooks";
+import { HighlightedText } from "../../react/RawHtml";
 
 function Card({
     api,
@@ -60,6 +63,7 @@ function Card({
 }) {
     const { setBranchIdToEdit } = useContext(BoardActionsContext);
     const shownAttributes = useContext(BoardPromotedAttributesContext);
+    const highlightedTokens = useContext(BoardHighlightTokensContext);
     // Tracks the `color` label, which the board does not redraw a card for.
     const colorClass = useNoteColorClass(note) || "";
     const editorRef = useRef<HTMLInputElement>(null);
@@ -192,7 +196,7 @@ function Card({
                 <>
                     <span className="title">
                         <span class={`icon ${icon}`} />
-                        {title}
+                        <HighlightedText text={title} highlightedTokens={highlightedTokens} />
                     </span>
                     <span
                         className="edit-icon icon bx bx-edit"

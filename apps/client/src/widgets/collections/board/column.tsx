@@ -61,6 +61,7 @@ export default function Column({
     nested,
     limit,
     columnItems,
+    totalCount,
     isNew,
     cardTemplates,
     api,
@@ -88,6 +89,11 @@ export default function Column({
     nested?: boolean,
     /** The note limit, absent if disabled. */
     limit?: number,
+    /**
+     * How many cards the column really holds, when an active filter leaves `columnItems` with
+     * fewer. The badge counts what is shown; the limit is about the real column.
+     */
+    totalCount?: number,
     api: BoardApi,
     parentNote: FNote,
     isInRelationMode: boolean,
@@ -160,7 +166,7 @@ export default function Column({
         : undefined;
 
     // Read here rather than in the badge: the column body shows an outline as well.
-    const isOverLimit = limit !== undefined && (columnItems?.length ?? 0) > limit;
+    const isOverLimit = limit !== undefined && (totalCount ?? columnItems?.length ?? 0) > limit;
     const isCollapsed = !!collapsed && !isActive && !isPeeked;
     // A column opened to take a dragged card takes its width at once, and its cards with it.
     const opensAtOnce = !!draggedCard || dropTarget === column;

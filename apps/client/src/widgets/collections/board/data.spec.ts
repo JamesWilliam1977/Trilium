@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import FBranch from "../../../entities/fbranch";
 import froca from "../../../services/froca";
 import { buildNote } from "../../../test/easy-froca";
-import { applyCardMove, type ColumnMap, getBoardData } from "./data";
+import { applyCardMove, type ColumnMap, filterColumnMap, getBoardData } from "./data";
 
 describe("applyCardMove", () => {
     /** Cards named by their note id, which is all this reads them for. */
@@ -57,6 +57,31 @@ describe("applyCardMove", () => {
         const start = board({ A: [ "a1" ], B: [] });
 
         expect(applyCardMove(start, "nope", "A", "B", 0)).toBe(start);
+    });
+
+    describe("filterColumnMap", () => {
+        it("keeps only the matched cards, in the order the column holds them", () => {
+            // The set is built in reversed order to prove it carries membership, not order.
+            const matched = new Set([ "a4", "a2", "a1" ]);
+            const filtered = filterColumnMap(
+                board({ A: [ "a1", "a2", "a3", "a4" ], B: [ "b1" ] }), matched);
+
+            expect(names(filtered, "A")).toEqual([ "a1", "a2", "a4" ]);
+            expect(names(filtered, "B")).toEqual([]);
+        });
+
+        it("keeps every column, emptied ones included", () => {
+            const filtered = filterColumnMap(board({ A: [ "a1" ], B: [] }), new Set([ "nothing" ]));
+
+            expect([ ...filtered.keys() ]).toEqual([ "A", "B" ]);
+            expect(names(filtered, "A")).toEqual([]);
+        });
+
+        it("hands the map back untouched while no filter is active", () => {
+            const start = board({ A: [ "a1" ] });
+
+            expect(filterColumnMap(start, null)).toBe(start);
+        });
     });
 });
 

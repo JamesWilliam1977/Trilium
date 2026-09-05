@@ -118,7 +118,12 @@ export default class BoardApi {
         private setBranchIdToEdit: (branchId: string | undefined) => void,
         private pending: PendingColumnWrites =
             { renames: new Map(), claims: new Map(), inFlight: 0 },
-        private statusDefinition?: BoardStatusDefinition
+        private statusDefinition?: BoardStatusDefinition,
+        /**
+         * Every card, when `byColumn` is narrowed by a filter. Bulk operations read this one, so a
+         * column operation reaches the cards the filter leaves out too.
+         */
+        private allByColumn?: ColumnMap
     ) {
         this.viewConfigSource = viewConfig;
         this.viewConfig = viewConfig ?? {};
@@ -144,7 +149,8 @@ export default class BoardApi {
         viewConfig: BoardViewData | undefined,
         saveConfig: (newConfig: BoardViewData) => void,
         setBranchIdToEdit: (branchId: string | undefined) => void,
-        statusDefinition?: BoardStatusDefinition
+        statusDefinition?: BoardStatusDefinition,
+        allByColumn?: ColumnMap
     ) {
         // What was sent to the end of a column stands in for what the map does not show yet, so it
         // is given up with the map it stands in for. Kept across a refresh, it would name a branch
@@ -154,6 +160,7 @@ export default class BoardApi {
         }
 
         this.byColumn = byColumn;
+        this.allByColumn = allByColumn;
         this.columns = columns;
         this.parentNote = parentNote;
         // Only a config the board has actually replaced, since `storeColumns` moves this one ahead
@@ -448,8 +455,10 @@ export default class BoardApi {
     }
 
     async removeColumn(column: string) {
-        // Remove the value from the notes.
-        const noteIds = this.byColumn?.get(column)?.map(item => item.note.noteId) || [];
+        // Remove the value from the notes. Read off the unfiltered map where there is one, so the
+        // value also comes off the cards an active filter is not showing.
+        const items = (this.allByColumn ?? this.byColumn)?.get(column);
+        const noteIds = items?.map(item => item.note.noteId) || [];
 
         const action: BulkAction = this.isRelationMode
             ? { name: "deleteRelation", relationName: this.statusAttribute }
@@ -674,6 +683,15 @@ export default class BoardApi {
         }
 
         this.storeConfig({ templates });
+    }
+
+    /** Stores the query the board is narrowed to, or clears it when given an empty one. */
+    setFilterQuery(query: string) {
+        if ((query || undefined) === this.viewConfig?.filterQuery) {
+            return;
+        }
+
+        this.storeConfig({ filterQuery: query || undefined });
     }
 
     /** Remembers what the last card was made from, so the next one is made from it too. */

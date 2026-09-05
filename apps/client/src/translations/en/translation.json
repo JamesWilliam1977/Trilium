@@ -4192,5 +4192,11 @@
       "invalid-symbol": "the markdown symbol should be one character, excepting \"[\", \" \", \"X\", and \"]\"",
       "duplicate-symbol": "duplicate markdown symbol"
     }
+  },
+  "collection_filter": {
+    "placeholder": "Filter...",
+    "tooltip": "Narrows the collection to the notes matching a search query. Press Enter to apply; clear the box to show everything again.",
+    "clear": "Clear the filter",
+    "fetch-error": "The filter could not be run."
   }
 }

@@ -41,6 +41,25 @@ export function applyCardMove(
 }
 
 /**
+ * The columns with only the cards in `matchedNoteIds`, keeping their order relative to each other.
+ *
+ * A filter narrows what is drawn, nothing else: every column stays, and the full map is what column
+ * discovery, the config write-back and bulk operations keep reading, so filtering cannot rewrite
+ * the board's columns or reach fewer cards than an operation means to.
+ */
+export function filterColumnMap(byColumn: ColumnMap, matchedNoteIds: Set<string> | null): ColumnMap {
+    if (!matchedNoteIds) {
+        return byColumn;
+    }
+
+    const filtered: ColumnMap = new Map();
+    for (const [ column, items ] of byColumn) {
+        filtered.set(column, items.filter(item => matchedNoteIds.has(item.note.noteId)));
+    }
+    return filtered;
+}
+
+/**
  * @param definitionOptions the choices the board's group-by definition offers, empty when it has no
  *                          select definition of its own to lead the column order.
  * @param pendingRenames the columns the board is in the middle of renaming or deleting. Read

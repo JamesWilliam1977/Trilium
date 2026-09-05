@@ -405,6 +405,15 @@ body.mobile .board-view-container .board-add-column {
     var(--card-title-inset) - var(--card-icon-inset) - var(--card-icon-size));
 }
 
+/* The mark.js spans the filter's matched tokens are wrapped in, styled as the search cards
+   style theirs. */
+.board-view-container .board-note > .title .ck-find-result {
+  background: var(--note-list-view-search-result-highlight-background);
+  color: var(--note-list-view-search-result-highlight-color);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .board-view-container .board-note > .edit-icon {
   position: absolute;
   top: 8px;

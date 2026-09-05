@@ -1,0 +1,41 @@
+:where(:root) {
+    --collection-filter-active-border-color: var(--main-text-color);
+    --collection-filter-error-color: #c73a35;
+    --collection-filter-error-background: var(--main-background-color);
+    --collection-filter-error-border-color: var(--main-border-color);
+}
+
+.collection-filter {
+    display: inline-flex;
+    position: relative;
+    align-items: center;
+    gap: 0.25em;
+
+    > input.form-control {
+        width: clamp(120px, 30vw, 260px);
+        padding: 2px 8px;
+        font-size: inherit;
+    }
+
+    &.active > input.form-control {
+        border-color: var(--collection-filter-active-border-color);
+    }
+
+    .collection-filter-error {
+        display: block;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 100;
+        max-width: 60vw;
+        border: 1px solid var(--collection-filter-error-border-color);
+        border-radius: 4px;
+        padding: 2px 8px;
+        background: var(--collection-filter-error-background);
+        color: var(--collection-filter-error-color);
+        font-size: 0.9em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
