@@ -28,3 +28,16 @@
     pointer-events: none;
 }
 
+.geo-map-container .maplibregl-user-location-dot {
+    --location-dot-target: 27px;
+    box-sizing: content-box;
+    border: calc((var(--location-dot-target) - 15px) / 2) solid transparent;
+    background-clip: padding-box;
+}
+
+@media (pointer: coarse) {
+    .geo-map-container .maplibregl-user-location-dot {
+        --location-dot-target: 44px;
+    }
+}
+
