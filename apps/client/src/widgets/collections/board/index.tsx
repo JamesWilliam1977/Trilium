@@ -749,7 +749,10 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         <div className="board-view">
             <CollectionProperties
                 note={parentNote}
-                centerChildren={<CollectionFilterInput filter={filter} />}
+                rightChildren={<CollectionFilterInput
+                    filter={filter}
+                    placeholder={t("board_view.filter-placeholder")}
+                />}
             />
             <BoardActionsContext.Provider value={boardActions}>
                 <BoardPromotedAttributesContext.Provider value={shownAttributes}>

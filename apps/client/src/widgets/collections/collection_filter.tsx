@@ -1,6 +1,7 @@
 import "./collection_filter.css";
 
 import type { HighlightedTokenInfo } from "@triliumnext/commons";
+import type { Tooltip } from "bootstrap";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
@@ -10,10 +11,19 @@ import type LoadResults from "../../services/load_results";
 import searchService from "../../services/search";
 import ActionButton from "../react/ActionButton";
 import FormTextBox from "../react/FormTextBox";
-import { useTriliumEvent } from "../react/hooks";
+import { useStaticTooltip, useTriliumEvent } from "../react/hooks";
 
 /** How long to wait after a change before re-running the active filter. */
 const RERUN_DEBOUNCE_MS = 300;
+
+// Hover only: the box is typed into, and a tooltip opened by the focus would sit over the header
+// for as long as the query is being written.
+const TOOLTIP_CONFIG: Partial<Tooltip.Options> = {
+    title: t("collection_filter.tooltip"),
+    placement: "bottom",
+    trigger: "hover",
+    animation: false
+};
 
 export interface CollectionFilter {
     /** The submitted query, empty while no filter is active. */
@@ -133,14 +143,20 @@ export function useCollectionFilter(note: FNote, {
 }
 
 /**
- * The filter box for a collection header. Enter submits what is typed and the button clears it.
+ * The filter box for a collection header, styled after the quick search box. Enter or the search
+ * button submits what is typed, and the clear button beside it drops the filter.
  *
  * What is typed is held here until it is submitted, so an unrelated redraw cannot apply a
  * half-typed query.
  */
-export function CollectionFilterInput({ filter }: { filter: CollectionFilter }) {
+export function CollectionFilterInput({ filter, placeholder }: {
+    filter: CollectionFilter;
+    /** Names the collection being filtered, for a view that has a word for what it holds. */
+    placeholder?: string;
+}) {
     const [ typed, setTyped ] = useState(filter.query);
     const inputRef = useRef<HTMLInputElement>(null);
+    useStaticTooltip(inputRef, TOOLTIP_CONFIG);
 
     // Adopt a query submitted elsewhere, or the stored one arriving on mount.
     useEffect(() => setTyped(filter.query), [ filter.query ]);
@@ -152,8 +168,7 @@ export function CollectionFilterInput({ filter }: { filter: CollectionFilter }) 
             <FormTextBox
                 inputRef={inputRef}
                 currentValue={typed}
-                placeholder={t("collection_filter.placeholder")}
-                title={t("collection_filter.tooltip")}
+                placeholder={placeholder ?? t("collection_filter.placeholder")}
                 onChange={setTyped}
                 onKeyDown={(e: KeyboardEvent) => {
                     if (e.key === "Enter") {
@@ -167,18 +182,28 @@ export function CollectionFilterInput({ filter }: { filter: CollectionFilter }) 
                     }
                 }}
             />
-            {(!!typed || isActive) && (
+            <div className="collection-filter-buttons">
+                {(!!typed || isActive) && (
+                    <ActionButton
+                        className="collection-filter-clear"
+                        noIconActionClass
+                        icon="bx bx-x"
+                        text={t("collection_filter.clear")}
+                        onClick={() => {
+                            setTyped("");
+                            filter.setQuery("");
+                            inputRef.current?.focus();
+                        }}
+                    />
+                )}
                 <ActionButton
-                    className="collection-filter-clear"
-                    icon="bx bx-x"
-                    text={t("collection_filter.clear")}
-                    onClick={() => {
-                        setTyped("");
-                        filter.setQuery("");
-                        inputRef.current?.focus();
-                    }}
+                    className="collection-filter-submit"
+                    noIconActionClass
+                    icon="bx bx-search"
+                    text={t("collection_filter.submit")}
+                    onClick={() => filter.setQuery(typed)}
                 />
-            )}
+            </div>
             {filter.error && <span className="collection-filter-error">{filter.error}</span>}
         </div>
     );

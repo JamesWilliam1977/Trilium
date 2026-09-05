@@ -309,6 +309,29 @@ describe("CollectionFilterInput", () => {
         expect(filter.setQuery).toHaveBeenCalledWith("#done");
     });
 
+    it("submits what is typed through the search button", async () => {
+        const { filter, input } = mountInput();
+
+        await act(async () => type(input, "#done"));
+        const submit = container.querySelector<HTMLElement>(".collection-filter-submit");
+        expect(submit).not.toBeNull();
+        await act(async () => submit?.click());
+
+        expect(filter.setQuery).toHaveBeenCalledWith("#done");
+    });
+
+    it("puts the clear button before the search button", async () => {
+        const { input } = mountInput();
+
+        await act(async () => type(input, "#done"));
+        const buttons = [ ...container.querySelectorAll("button") ].map(button => button.className);
+        const clear = buttons.findIndex(name => name.includes("collection-filter-clear"));
+        const submit = buttons.findIndex(name => name.includes("collection-filter-submit"));
+
+        expect(clear).toBeGreaterThanOrEqual(0);
+        expect(submit).toBe(clear + 1);
+    });
+
     it("clears the filter through the button and refocuses the box", async () => {
         const { filter } = mountInput({ query: "#done" });
 

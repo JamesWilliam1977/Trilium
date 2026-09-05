@@ -3493,7 +3493,8 @@
       "move_column": "Move the column left / right",
       "move_column_to_edge": "Move the column to the far left / right"
     },
-    "status-alias": "Status"
+    "status-alias": "Status",
+    "filter-placeholder": "Filter board..."
   },
   "dashboard_view": {
     "refresh-widget": "Refresh",
@@ -4195,8 +4196,9 @@
   },
   "collection_filter": {
     "placeholder": "Filter...",
-    "tooltip": "Narrows the collection to the notes matching a search query. Press Enter to apply; clear the box to show everything again.",
+    "tooltip": "Narrows the collection to the notes matching a search query. Press Enter or the search button to apply; clear the box to show everything again.",
     "clear": "Clear the filter",
-    "fetch-error": "The filter could not be run."
+    "fetch-error": "The filter could not be run.",
+    "submit": "Apply the filter"
   }
 }
