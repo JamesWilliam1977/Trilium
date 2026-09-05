@@ -3306,8 +3306,10 @@ describe("the promoted attributes a card shows", () => {
 
 describe("Board filtering", () => {
     let container: HTMLElement;
+    let host: Component;
 
     afterEach(() => {
+        vi.useRealTimers();
         saved.length = 0;
         render(null, container);
         container.remove();
@@ -3338,10 +3340,11 @@ describe("Board filtering", () => {
             ]
         });
 
+        host = new Component();
         container = document.body.appendChild(document.createElement("div"));
         await act(async () => {
             render(
-                <ParentComponent.Provider value={new Component()}>
+                <ParentComponent.Provider value={host}>
                     <Harness
                         note={note}
                         noteIds={[ ...note.getChildNoteIds() ]}
@@ -3367,6 +3370,17 @@ describe("Board filtering", () => {
             .map(el => el.textContent);
     }
 
+    /** A branch change under the board, which is what re-runs an active filter. */
+    function branchChange(parentNoteId: string, noteId: string) {
+        const results = new LoadResults([ {
+            entityName: "branches",
+            entityId: "branch1",
+            entity: { branchId: "branch1", parentNoteId, noteId }
+        } as never ]);
+        results.addBranch("branch1", "other");
+        return results;
+    }
+
     it("shows only the matched cards, in their own order, keeping every column", async () => {
         // The matches arrive in score order; the board must keep branch order regardless.
         const note = await setup({ matched: [ "filtered3", "filtered1" ] });
@@ -3384,6 +3398,32 @@ describe("Board filtering", () => {
         // One of three cards is shown, and three stand against the limit of two.
         expect(column?.querySelector(".counter-badge")?.textContent).toBe("1/2");
         expect(column?.classList.contains("over-limit")).toBe(true);
+    });
+
+    /**
+     * The cards drawn are derived from what the filter matches rather than held beside it, so a
+     * re-run's answer cannot be left unapplied by whatever else the board is doing at the time.
+     */
+    it("draws what a re-run matches", async () => {
+        const note = await setup({ matched: [ "filtered1" ] });
+        expect(cardTitles(0)).toEqual([ "First" ]);
+
+        searchInSubtree.mockResolvedValue({
+            searchResultNoteIds: [ "filtered2", "filtered3" ],
+            highlightedTokens: [],
+            error: null
+        });
+
+        // A change under the board re-runs the filter, after the wait that collects a run of them.
+        vi.useFakeTimers();
+        await act(async () => {
+            await host.handleEvent("entitiesReloaded", {
+                loadResults: branchChange(note.noteId, "filtered2")
+            });
+            await vi.advanceTimersByTimeAsync(400);
+        });
+
+        expect(cardTitles(0)).toEqual([ "Second", "Third" ]);
     });
 
     it("marks the matched tokens in the card titles", async () => {

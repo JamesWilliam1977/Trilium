@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import FBranch from "../../../entities/fbranch";
 import froca from "../../../services/froca";
 import { buildNote } from "../../../test/easy-froca";
-import { applyCardMove, type ColumnMap, filterColumnMap, getBoardData } from "./data";
+import {
+    applyCardMove, type ColumnMap, filterColumnMap, getBoardData, unfilteredCardIndex
+} from "./data";
 
 describe("applyCardMove", () => {
     /** Cards named by their note id, which is all this reads them for. */
@@ -81,6 +83,41 @@ describe("applyCardMove", () => {
             const start = board({ A: [ "a1" ] });
 
             expect(filterColumnMap(start, null)).toBe(start);
+        });
+    });
+
+    describe("unfilteredCardIndex", () => {
+        const items = (ids: string[]) => board({ A: ids }).get("A") ?? [];
+
+        it("puts the card where the card it was dropped before stands", () => {
+            const all = items([ "hidden1", "hidden2", "a1", "hidden3", "a2" ]);
+            const shown = items([ "a1", "a2" ]);
+
+            // Before the first card on screen, which stands after two hidden ones.
+            expect(unfilteredCardIndex(shown, all, 0)).toBe(2);
+            // Between the two on screen, which is where `a2` stands rather than where `hidden3` does.
+            expect(unfilteredCardIndex(shown, all, 1)).toBe(4);
+        });
+
+        it("puts a card dropped past the last one on screen right after it", () => {
+            const all = items([ "a1", "hidden1", "hidden2" ]);
+            const shown = items([ "a1" ]);
+
+            expect(unfilteredCardIndex(shown, all, 1)).toBe(1);
+        });
+
+        it("counts against the column itself when nothing is filtered out", () => {
+            const all = items([ "a1", "a2", "a3" ]);
+
+            for (const index of [ 0, 1, 2 ]) {
+                expect(unfilteredCardIndex(all, all, index)).toBe(index);
+            }
+            expect(unfilteredCardIndex(all, all, 3)).toBe(3);
+        });
+
+        it("puts the card at the end of a column showing none of its own", () => {
+            expect(unfilteredCardIndex([], items([ "hidden1" ]), 0)).toBe(1);
+            expect(unfilteredCardIndex([], [], 0)).toBe(0);
         });
     });
 });

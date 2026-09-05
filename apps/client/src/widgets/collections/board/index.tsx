@@ -48,7 +48,9 @@ import { currentCardTemplate, DEFAULT_CARD_TEMPLATES } from "./card_templates";
 import ColumnLimitDialog from "./column_limit";
 import BoardProperties from "./properties";
 import { openBoardContextMenu, openCreateColumnMenu } from "./context_menu";
-import { applyCardMove, ColumnMap, filterColumnMap, getBoardData } from "./data";
+import {
+    applyCardMove, ColumnMap, filterColumnMap, getBoardData, unfilteredCardIndex
+} from "./data";
 import { useBoardKeyboard } from "./keyboard";
 
 /**
@@ -267,8 +269,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const [ statusAttributeWithPrefix ] = useNoteLabelWithDefault(parentNote, "board:groupBy", DEFAULT_GROUP_BY);
     const [ includeArchived ] = useNoteLabelBoolean(parentNote, "includeArchived");
     const [ inboxEnabled ] = useNoteLabelBoolean(parentNote, "enableInboxColumn");
-    const [ byColumn, setByColumn ] = useState<ColumnMap>();
-    /** Every card, while `byColumn` holds only what the active filter matches. */
+    /** Every card the board holds, which an active filter narrows before the cards are drawn. */
     const [ allByColumn, setAllByColumn ] = useState<ColumnMap>();
     const [ columns, setColumns ] = useState<string[]>();
     const [ isInRelationMode, setIsRelationMode ] = useState(false);
@@ -342,6 +343,19 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     // them for a move that touched one. Another board takes a new one, since this instance is
     // reused across boards and the api holds that board's record of the writes in flight.
     const apiRef = useRef<{ board: string, api: Api }>();
+    const persistFilterQuery = useCallback(
+        (query: string) => apiRef.current?.api.setFilterQuery(query), []);
+    const filter = useCollectionFilter(parentNote, {
+        persistedQuery: viewConfig?.filterQuery,
+        onQueryChanged: persistFilterQuery,
+        collectionNoteIds: noteIds
+    });
+    // The cards as drawn. Derived rather than held, so that what is shown cannot fall behind what
+    // the filter matches: a card move and a search resolving in the same moment both land here.
+    const byColumn = useMemo(
+        () => allByColumn && filterColumnMap(allByColumn, filter.matchedNoteIds),
+        [ allByColumn, filter.matchedNoteIds ]);
+
     if (!apiRef.current || apiRef.current.board !== boardIdentity) {
         apiRef.current = {
             board: boardIdentity,
@@ -356,17 +370,6 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             saveConfig, setBranchIdToEdit, statusDefinition, allByColumn);
     }
     const api = apiRef.current.api;
-
-    const persistFilterQuery = useCallback(
-        (query: string) => apiRef.current?.api.setFilterQuery(query), []);
-    const filter = useCollectionFilter(parentNote, {
-        persistedQuery: viewConfig?.filterQuery,
-        onQueryChanged: persistFilterQuery,
-        collectionNoteIds: noteIds
-    });
-    // Read through a ref by `refresh`, whose result can land after the filter has moved on.
-    const matchedNoteIdsRef = useRef(filter.matchedNoteIds);
-    matchedNoteIdsRef.current = filter.matchedNoteIds;
     // Every member is one of useState's own setters, so this value is built once and never changes
     // identity -- a drag cannot reach anything that reads only this.
     const openBoardMenu = useCallback((event: ContextMenuEvent) => {
@@ -487,7 +490,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         getBoardData(
             parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived,
             statusDefinition?.options ?? [], pendingRenamesRef.current.writes.renames, inboxEnabled)
-            .then(({ byColumn, columns, newPersistedData, isInRelationMode, settledRenames }) => {
+            .then(({
+                byColumn: allCards, columns, newPersistedData, isInRelationMode, settledRenames
+            }) => {
                 if (refreshId !== refreshSeqRef.current) {
                     return;
                 }
@@ -496,8 +501,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                     settleColumn(pendingRenamesRef.current.writes, settled);
                 }
 
-                setAllByColumn(byColumn);
-                setByColumn(filterColumnMap(byColumn, matchedNoteIdsRef.current));
+                setAllByColumn(allCards);
                 setIsRelationMode(isInRelationMode);
                 setColumns(columns);
 
@@ -564,11 +568,17 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         },
         onCardEnd: (card, position) => {
             const branchId = byColumn?.get(card.fromColumn)?.[card.index]?.branch.branchId;
-            if (position && branchId && byColumn) {
+            if (position && branchId && byColumn && allByColumn) {
                 // Drawn where it landed at once, and held there until both writes are in: each of
                 // them lands a redraw, and the first would show the card at the top of the column.
-                setByColumn(applyCardMove(
-                    byColumn, card.noteId, card.fromColumn, position.column, position.index));
+                // Written into the full column, which is what the cards are drawn from, at the
+                // place the move is written against rather than the one it was dropped at.
+                setAllByColumn(applyCardMove(
+                    allByColumn, card.noteId, card.fromColumn, position.column,
+                    unfilteredCardIndex(
+                        byColumn.get(position.column) ?? [],
+                        allByColumn.get(position.column) ?? [],
+                        position.index)));
                 movesInFlight.current++;
                 // Any refresh already on its way is about the board as it stood before the drop,
                 // and would put the card back where it came from as it resolves.
@@ -683,15 +693,6 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     useEffect(refresh, [
         parentNote, noteIds, viewConfig, statusAttributeWithPrefix, statusDefinition, inboxEnabled
     ]);
-
-    // Redraws for a change in what the filter matches; a change in the cards themselves goes
-    // through `refresh`. Skipped while a move is being written, exactly as a refresh would be:
-    // the board has already been drawn as the move will leave it, and the maps are older.
-    useEffect(() => {
-        if (allByColumn && !movesInFlight.current) {
-            setByColumn(filterColumnMap(allByColumn, filter.matchedNoteIds));
-        }
-    }, [ filter.matchedNoteIds ]);
 
     // The drag reports where the column landed among the ones on screen, which is not where it
     // landed among them all once some are archived and hidden. Translated here so a reorder leaves

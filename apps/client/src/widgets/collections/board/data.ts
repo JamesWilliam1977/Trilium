@@ -3,10 +3,12 @@ import FNote from "../../../entities/fnote";
 import { INBOX_COLUMN, resolveBoardColumns } from "./columns";
 import { BoardColumnData, BoardViewData } from "./index";
 
-export type ColumnMap = Map<string, {
+export interface ColumnItem {
     branch: FBranch;
     note: FNote;
-}[]>;
+}
+
+export type ColumnMap = Map<string, ColumnItem[]>;
 
 /**
  * The columns as they stand once a card has moved, for drawing the outcome before the writes land.
@@ -59,6 +61,33 @@ export function filterColumnMap(
         filtered.set(column, items.filter(item => matchedNoteIds.has(item.note.noteId)));
     }
     return filtered;
+}
+
+/**
+ * Where a card dropped among the cards on screen goes in the full column.
+ *
+ * A drop is measured against the cards a filter leaves showing, and the move is written against the
+ * visible card it was dropped before. That card decides the place in the full column too, so the
+ * cards a filter hides keep their order around it.
+ *
+ * @param shown the target column as it is drawn, counting the moved card where it stays in place.
+ * @param all the same column with every card it holds.
+ * @param index where the card goes among the ones drawn.
+ */
+export function unfilteredCardIndex(shown: ColumnItem[], all: ColumnItem[], index: number) {
+    const placeOf = (item: ColumnItem | undefined) => (item
+        ? all.findIndex(other => other.branch.branchId === item.branch.branchId)
+        : -1);
+
+    const before = placeOf(shown[index]);
+    if (before >= 0) {
+        return before;
+    }
+
+    // Dropped past the last card on screen, which is what the move is written against; a hidden
+    // card below it stays below.
+    const after = placeOf(shown.at(-1));
+    return after >= 0 ? after + 1 : all.length;
 }
 
 /**
