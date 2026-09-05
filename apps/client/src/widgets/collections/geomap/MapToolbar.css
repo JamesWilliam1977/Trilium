@@ -5,11 +5,19 @@
     width: 32px;
 }
 
-/* MapLibre's locate button is added to the corner this group stands in (see useGeolocateControl in
-   MapToolbar.tsx), so it is lifted to stand above the group: the foot is the room kept from the
-   edge, the group's height and as much air again. Named by four classes to outweigh the corner
-   margins index.css gives every control. */
-.geo-map-container .maplibregl-ctrl-bottom-right .maplibregl-ctrl.maplibregl-ctrl-group {
-    margin-bottom: var(--geo-map-foot);
+/* The glyph breathes while the device is being asked where it is: the one state of the button that
+   is a wait rather than a choice. Boxicons draws the glyph in the button's ::before. */
+.geo-map-container .geo-map-toolbar .geo-map-locate-button.locating::before {
+    animation: geo-map-locating 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes geo-map-locating {
+    to { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .geo-map-container .geo-map-toolbar .geo-map-locate-button.locating::before {
+        animation: none;
+    }
 }
 

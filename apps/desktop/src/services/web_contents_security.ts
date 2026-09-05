@@ -159,7 +159,7 @@ export function hardenWebviewPreferences(webPreferences: Electron.WebPreferences
  *   *check* handler rather than the request handler, so granting it here is
  *   what keeps the picker from falling back to the stock list.
  *   `geolocation` lets the geo map's locate button ask where this device is
- *   (see `useGeolocateControl` in the client). Chromium prompts for nothing
+ *   (see `useGeolocate` in the client). Chromium prompts for nothing
  *   of its own in Electron, so this grant is the only gate; the origin check
  *   below keeps it from remote embeds, and MapLibre probes the *check*
  *   handler before it enables the button at all.

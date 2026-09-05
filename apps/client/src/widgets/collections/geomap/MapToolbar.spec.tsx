@@ -8,18 +8,25 @@
 import { GeolocateControl, type Map as MapLibreGLMap } from "maplibre-gl";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderInto } from "../../../test/render";
 import { ParentMap } from "./map";
 import MapToolbar from "./MapToolbar";
+
+const { showError } = vi.hoisted(() => ({ showError: vi.fn() }));
+vi.mock("../../../services/toast", () => ({ default: { showError } }));
+// t() returns the key, so the assertions below are on which title the button wears rather than on
+// its English wording.
+vi.mock("../../../services/i18n", () => ({ t: (key: string) => key }));
 
 /** The order the group lays its buttons out in — the image viewer's, with the tilt leading and the
  *  screen at the end. */
 const TILT = 0;
 const ZOOM_OUT = 1;
 const ZOOM_IN = 2;
-const FULLSCREEN = 3;
+const LOCATE = 3;
+const FULLSCREEN = 4;
 
 /** A map that zooms and tilts, says so, and stands somewhere — all these controls ask of one. */
 function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
@@ -43,7 +50,7 @@ function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
     const controls = new Set<unknown>();
 
     return {
-        addControl: vi.fn((control: unknown, _position?: string) => { controls.add(control); }),
+        addControl: vi.fn((control: unknown) => { controls.add(control); }),
         removeControl: vi.fn((control: unknown) => { controls.delete(control); }),
         hasControl: (control: unknown) => controls.has(control),
         /** The map being torn down, as `map.remove()` does before any cleanup around it runs. */
@@ -83,6 +90,17 @@ function setFullscreenElement(element: Element | null) {
 beforeEach(() => {
     Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
     document.exitFullscreen = vi.fn(async () => {});
+    // What a browser offers on a secure origin, which is the only place the locate button is
+    // offered: happy-dom leaves the first undefined and the second null.
+    Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
+    Object.defineProperty(navigator, "geolocation", { value: {}, configurable: true });
+    // The control's own press, which would otherwise reach for the browser's geolocation.
+    vi.spyOn(GeolocateControl.prototype, "trigger").mockReturnValue(true);
+    showError.mockClear();
+});
+
+afterEach(() => {
+    vi.restoreAllMocks();
 });
 
 /** Builds the controls over a map and settles them, so they are listening before being spoken to. */
@@ -107,6 +125,13 @@ function press(container: HTMLElement, index: number) {
     act(() => buttons(container)[index].click());
 }
 
+/** The locate control the toolbar stood on the map, which the tests speak for as the browser would. */
+function controlOn(map: ReturnType<typeof fakeMap>) {
+    const control: unknown = map.addControl.mock.calls[0]?.[0];
+    if (!(control instanceof GeolocateControl)) throw new Error("no locate control was added");
+    return control;
+}
+
 describe("geo map MapToolbar", () => {
     it("offers what the map's own controls did, laid out as the image viewer's group", () => {
         const container = renderToolbar(fakeMap());
@@ -115,6 +140,7 @@ describe("geo map MapToolbar", () => {
             expect.stringContaining("geo-map-tilt-button"),
             expect.stringContaining("bx-minus-circle"),
             expect.stringContaining("bx-plus-circle"),
+            expect.stringContaining("bx-current-location"),
             expect.stringContaining("bx-fullscreen")
         ]);
     });
@@ -153,9 +179,11 @@ describe("geo map MapToolbar", () => {
         try {
             const container = renderToolbar(fakeMap());
 
-            // Only the tilt and the screen remain — see the mobile note in MapToolbar.tsx.
+            // The tilt, the device's position and the screen remain — see the mobile note in
+            // MapToolbar.tsx.
             expect(buttons(container).map((button) => button.className)).toEqual([
                 expect.stringContaining("geo-map-tilt-button"),
+                expect.stringContaining("bx-current-location"),
                 expect.stringContaining("bx-fullscreen")
             ]);
         } finally {
@@ -169,19 +197,22 @@ describe("geo map MapToolbar", () => {
         expect(buttons(container)).toHaveLength(0);
     });
 
-    it("stands MapLibre's locate button on the map, set to follow the device, and takes it off again", () => {
+    it("stands MapLibre's locate control on the map with its own button hidden, and takes it off again", () => {
         const map = fakeMap();
         const container = renderToolbar(map);
 
         expect(map.addControl).toHaveBeenCalledTimes(1);
-        const [ control, position ] = map.addControl.mock.calls[0];
-        expect(control).toBeInstanceOf(GeolocateControl);
+        const control = controlOn(map);
         // A toggle that follows the device rather than a button that flies there once.
-        expect((control as GeolocateControl).options.trackUserLocation).toBe(true);
+        expect(control.options.trackUserLocation).toBe(true);
         // GPS where the device has it; MapLibre's default settles for a coarse fix.
-        expect((control as GeolocateControl).options.positionOptions?.enableHighAccuracy).toBe(true);
-        // The corner this group stands in, lifted above it (see MapToolbar.css).
-        expect(position).toBe("bottom-right");
+        expect(control.options.positionOptions?.enableHighAccuracy).toBe(true);
+
+        // MapLibre builds the control's white box; the toolbar wears the button instead.
+        const box = document.createElement("div");
+        vi.spyOn(GeolocateControl.prototype, "onAdd").mockReturnValue(box);
+        expect(control.onAdd(map as unknown as MapLibreGLMap)).toBe(box);
+        expect(box.hidden).toBe(true);
 
         act(() => { render(null, container); });
         expect(map.removeControl).toHaveBeenCalledWith(control);
@@ -193,6 +224,89 @@ describe("geo map MapToolbar", () => {
         torn.remove();
         act(() => { render(null, second); });
         expect(torn.removeControl).not.toHaveBeenCalled();
+    });
+
+    it("presses the control's own button, and wears what the control is doing", () => {
+        const map = fakeMap();
+        const container = renderToolbar(map);
+        const control = controlOn(map);
+        const button = () => buttons(container)[LOCATE];
+
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate");
+        expect(button().classList.contains("active")).toBe(false);
+
+        press(container, LOCATE);
+        expect(control.trigger).toHaveBeenCalledTimes(1);
+
+        // The press as the control reports it: waiting on the browser, then following the fix.
+        act(() => { control.fire("trackuserlocationstart"); });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-waiting");
+        expect(button().classList.contains("active")).toBe(true);
+        expect(button().classList.contains("locating")).toBe(true);
+
+        act(() => { control.fire("geolocate", { coords: {}, timestamp: 0 }); });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-following");
+        expect(button().classList.contains("active")).toBe(true);
+        expect(button().classList.contains("locating")).toBe(false);
+
+        // A drag frees the camera. The control says the tracking ended and, in the same breath,
+        // that the dot merely lost the camera; the second word is the one that counts.
+        act(() => {
+            control.fire("trackuserlocationend");
+            control.fire("userlocationlostfocus");
+        });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-return");
+        expect(button().classList.contains("active")).toBe(false);
+
+        // Pressed again, the camera returns to the dot.
+        act(() => {
+            control.fire("trackuserlocationstart");
+            control.fire("userlocationfocus");
+        });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-following");
+        expect(button().classList.contains("active")).toBe(true);
+
+        // Pressed while following, the watch stops: the drag's first word with no second one.
+        act(() => { control.fire("trackuserlocationend"); });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate");
+        expect(button().classList.contains("active")).toBe(false);
+    });
+
+    it("says once when the position cannot be found, and stands down when access is denied", () => {
+        const map = fakeMap();
+        const container = renderToolbar(map);
+        const control = controlOn(map);
+        const button = () => buttons(container)[LOCATE];
+
+        act(() => { control.fire("trackuserlocationstart"); });
+        act(() => { control.fire("error", { code: 2, message: "unavailable" }); });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-error");
+        expect(showError).toHaveBeenCalledTimes(1);
+        expect(showError).toHaveBeenLastCalledWith("geo-map.location-unavailable");
+
+        // The watch goes on reporting the same failure; the reader was told the first time.
+        act(() => { control.fire("error", { code: 2, message: "unavailable" }); });
+        expect(showError).toHaveBeenCalledTimes(1);
+
+        // A fix arriving after all takes the word back.
+        act(() => { control.fire("geolocate", { coords: {}, timestamp: 0 }); });
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-following");
+
+        // Denied is the end of it: the control clears its watch, and the button stands down.
+        act(() => { control.fire("error", { code: 1, message: "denied" }); });
+        expect(button().disabled).toBe(true);
+        expect(button().getAttribute("aria-label")).toBe("geo-map.locate-unavailable");
+        expect(showError).toHaveBeenLastCalledWith("geo-map.location-denied");
+    });
+
+    it("keeps the locate button off a map that cannot ask where the device is", () => {
+        // What a browser says of a page served over plain HTTP, where the Geolocation API refuses.
+        Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
+        const map = fakeMap();
+        const container = renderToolbar(map);
+
+        expect(buttons(container).some((button) => button.classList.contains("bx-current-location"))).toBe(false);
+        expect(map.addControl).not.toHaveBeenCalled();
     });
 
     it("zooms the map in either direction", () => {
