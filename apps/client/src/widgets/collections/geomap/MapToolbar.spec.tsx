@@ -178,6 +178,8 @@ describe("geo map MapToolbar", () => {
         expect(control).toBeInstanceOf(GeolocateControl);
         // A toggle that follows the device rather than a button that flies there once.
         expect((control as GeolocateControl).options.trackUserLocation).toBe(true);
+        // GPS where the device has it; MapLibre's default settles for a coarse fix.
+        expect((control as GeolocateControl).options.positionOptions?.enableHighAccuracy).toBe(true);
         // The corner this group stands in, lifted above it (see MapToolbar.css).
         expect(position).toBe("bottom-right");
 

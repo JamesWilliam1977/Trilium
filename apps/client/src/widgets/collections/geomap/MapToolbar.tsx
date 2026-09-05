@@ -129,7 +129,11 @@ function useGeolocateControl(map: MapLibreGLMap | null) {
     useEffect(() => {
         if (!map) return;
 
-        const control = new GeolocateControl({ trackUserLocation: true });
+        const control = new GeolocateControl({
+            trackUserLocation: true,
+            // GPS where the device has it, rather than the cell or Wi-Fi fix the default settles for.
+            positionOptions: { enableHighAccuracy: true }
+        });
         map.addControl(control, "bottom-right");
 
         return () => {
