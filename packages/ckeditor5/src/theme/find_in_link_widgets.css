@@ -1,9 +1,0 @@
-/* Themes style anchors with their own background, which outranks the find highlight on the
-   reference link widget. Restate the CKEditor find colors at widget specificity. */
-.ck-content .ck-widget.ck-find-result {
-    background: var(--ck-color-highlight-background);
-}
-
-.ck-content .ck-widget.ck-find-result_selected {
-    background: hsl(29, 100%, 60%);
-}

@@ -82,24 +82,27 @@ describe("FindInLinkWidgets", () => {
         expect(resultElementNames(commandResult.results)).toEqual([
             "text", "reference", "linkMention", "linkEmbed"
         ]);
-        expect(editingRoot?.querySelector("a.reference-link.ck-find-result")).not.toBeNull();
-        expect(editingRoot?.querySelector("span.link-mention.ck-find-result")).not.toBeNull();
-        expect(editingRoot?.querySelector("section.link-embed.ck-find-result")).not.toBeNull();
+        // The highlight goes on the matching characters, never on the widget itself.
+        expect(matchTexts(editingRoot, "a.reference-link")).toEqual([ "match" ]);
+        expect(matchTexts(editingRoot, "span.link-mention")).toEqual([ "match" ]);
+        expect(matchTexts(editingRoot, "section.link-embed")).toEqual([ "match" ]);
+        expect(editingRoot?.querySelector(".ck-widget.ck-find-result")).toBeNull();
 
         editor.execute("findNext");
         const selectedReference = editingRoot?.querySelector(
-            "a.reference-link.ck-find-result_selected"
+            "a.reference-link .ck-find-result_selected"
         );
-        expect(selectedReference).not.toBeNull();
+        expect(selectedReference?.textContent).toBe("match");
     });
 
-    it("keeps the highlight visible on anchor widgets that a theme styles", () => {
+    it("highlights the matching characters of an anchor widget that a theme styles", () => {
         // The first two rules mirror CKEditor's find-and-replace theme; the last mirrors an
         // application theme that gives every link its own background.
         const themeStyle = document.createElement("style");
         themeStyle.textContent =
             ":root { --ck-color-highlight-background: rgb(255, 255, 0); }" +
             ".ck-find-result { background: var(--ck-color-highlight-background); }" +
+            ".ck-find-result_selected { background: rgb(255, 150, 51); }" +
             ".ck-content a { background: transparent; }";
         document.head.append(themeStyle);
         try {
@@ -110,18 +113,56 @@ describe("FindInLinkWidgets", () => {
             editor.execute("find", "match");
 
             const reference = editor.editing.view.getDomRoot()?.querySelector("a.reference-link");
-            if (!reference) {
-                throw new Error("The test editor did not render the reference link.");
+            const match = reference?.querySelector(".ck-find-result");
+            if (!reference || !match) {
+                throw new Error("The test editor did not highlight the reference link.");
             }
-            expect(reference.classList.contains("ck-find-result")).toBe(true);
-            expect(getComputedStyle(reference).backgroundColor).toBe("rgb(255, 255, 0)");
+            expect(match.textContent).toBe("match");
+            expect(getComputedStyle(reference).backgroundColor).toBe("rgba(0, 0, 0, 0)");
+            expect(getComputedStyle(match).backgroundColor).toBe("rgb(255, 255, 0)");
 
             editor.execute("findNext");
-            expect(reference.classList.contains("ck-find-result_selected")).toBe(true);
-            expect(getComputedStyle(reference).backgroundColor).toBe("rgb(255, 150, 51)");
+            const selected = reference.querySelector(".ck-find-result_selected");
+            if (!selected) {
+                throw new Error("The test editor did not mark the reference link as current.");
+            }
+            expect(selected.textContent).toBe("match");
+            expect(getComputedStyle(selected).backgroundColor).toBe("rgb(255, 150, 51)");
         } finally {
             themeStyle.remove();
         }
+    });
+
+    it("wraps every match in place and restores the text when the search changes", () => {
+        setModelData(
+            editor.model,
+            '<paragraph><reference href="#root/ref"></reference></paragraph>' +
+                '<linkEmbed url="https://card.example/" embedType="opengraph" title="Card match" ' +
+                'description="Card description" siteName="Card site"></linkEmbed>'
+        );
+
+        const editingRoot = editor.editing.view.getDomRoot();
+        const reference = editingRoot?.querySelector("a.reference-link");
+        const card = editingRoot?.querySelector("section.link-embed");
+        const title = reference?.querySelector("span");
+        if (!reference || !card || !title) {
+            throw new Error("The test editor did not render the link widgets.");
+        }
+        expect(reference.textContent).toBe("Reference match");
+
+        // Repeated matches inside one text node, and one match in each of the card's three.
+        editor.execute("find", "e");
+        expect(matchTexts(editingRoot, "a.reference-link")).toEqual([ "e", "e", "e", "e" ]);
+        expect(reference.textContent).toBe("Reference match");
+        editor.execute("find", "Card");
+        expect(matchTexts(editingRoot, "section.link-embed")).toEqual([ "Card", "Card", "Card" ]);
+        expect(card.textContent).toBe("Card matchCard descriptionCard site");
+
+        editor.execute("find", "absent");
+        expect(matchTexts(editingRoot, "a.reference-link")).toEqual([]);
+        expect(matchTexts(editingRoot, "section.link-embed")).toEqual([]);
+        expect(reference.textContent).toBe("Reference match");
+        expect(title.childNodes).toHaveLength(1);
     });
 
     it("matches only the text that each link widget displays", () => {
@@ -270,6 +311,21 @@ function findCount(
 ): number {
     editor.execute("find", text, options);
     return editor.plugins.get(FindAndReplaceEditing).state?.results.length ?? 0;
+}
+
+/**
+ * Returns the text of every find highlight inside the widget `selector` matches. The current
+ * result carries `ck-find-result_selected` instead of `ck-find-result`, as CKEditor's widget
+ * highlight stack keeps only the topmost descriptor.
+ */
+function matchTexts(editingRoot: HTMLElement | null | undefined, selector: string): string[] {
+    const widget = editingRoot?.querySelector(selector);
+    if (!widget) {
+        throw new Error(`The test editor did not render ${selector}.`);
+    }
+
+    return [ ...widget.querySelectorAll(".ck-find-result, .ck-find-result_selected") ]
+        .map((match) => match.textContent ?? "");
 }
 
 function resultElementNames(results: Iterable<FindResultType>): string[] {
