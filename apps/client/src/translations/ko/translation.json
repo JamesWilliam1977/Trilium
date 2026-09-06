@@ -1405,7 +1405,13 @@
     "remove_value": "이 값 제거",
     "select_values_placeholder": "옵션을 선택하거나 새로 만드세요",
     "values_placeholder": "값을 입력하고 Enter 키를 누르세요",
-    "add_value": "이 값 추가"
+    "add_value": "이 값 추가",
+    "create_attribute": "새 속성 생성",
+    "edit_attribute": "이 속성 편집",
+    "delete_attribute": "이 속성 삭제",
+    "shown_on_items": "항목에 표시",
+    "hidden_from_items": "항목에서 숨김",
+    "delete_confirmation": "이 컬렉션의 모든 노트에서 <strong>{{name}}</strong> 및 해당 값을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
   },
   "script_executor": {
     "query": "쿼리",
@@ -2850,7 +2856,15 @@
     "next-result": "다음 결과",
     "result-position": "총 {{total}}개 중 {{index}}번째 결과, 클릭하여 해당 결과로 돌아가기",
     "results-on-map": "이 지도에서",
-    "go-to-coordinates": "{{- coordinates}}(으)로 이동"
+    "go-to-coordinates": "{{- coordinates}}(으)로 이동",
+    "locate": "현재 위치 표시",
+    "locate-waiting": "현재 위치 찾는 중…",
+    "locate-following": "현재 위치 추적 중지",
+    "locate-return": "현재 위치로 돌아가기",
+    "locate-error": "현재 위치를 찾을 수 없습니다. 찾기를 중지하려면 다시 누르세요.",
+    "locate-unavailable": "현재 위치를 사용할 수 없습니다",
+    "location-denied": "위치 접근이 거부되었습니다. 지도에 현재 위치를 표시하려면 브라우저 또는 시스템 설정에서 Trilium의 위치 접근을 허용하세요.",
+    "location-unavailable": "현재 위치를 확인할 수 없습니다."
   },
   "geo-map-context": {
     "open-location": "위치 열기",
@@ -3170,7 +3184,8 @@
     "cluster-markers": "가까운 마커 그룹화",
     "presentation-theme": "테마",
     "board-inbox-column": "받은 편지함 열 표시",
-    "board-inbox-column-help": "열에 할당되지 않은 하위 노트를 나열하는 받은 편지함 열을 표시합니다."
+    "board-inbox-column-help": "열에 할당되지 않은 하위 노트를 나열하는 받은 편지함 열을 표시합니다.",
+    "vector_auto": "벡터(자동)"
   },
   "table_context_menu": {
     "delete_row": "행 삭제"
@@ -3261,10 +3276,21 @@
     "collapse-all-columns": "모든 열 접기",
     "expand-all-columns": "모든 열 펼치기",
     "show-inbox-column": "받은 편지함 열 표시",
-    "show-archived-notes": "보관된 노트 표시",
+    "show-archived-notes": "보관된 카드/열 표시",
     "more-templates": "더 많은 템플릿…",
     "card-template": "카드 템플릿 선택",
-    "change-note-icon": "아이콘 변경"
+    "change-note-icon": "아이콘 변경",
+    "general": "일반",
+    "show-archived": "보관된 카드 및 열 표시",
+    "properties": "보드 속성",
+    "properties-title": "보드 속성",
+    "card-templates": "카드 템플릿",
+    "card-templates-hint": "새 보드 카드를 만들 때 사용할 노트 유형과 노트 템플릿을 선택하세요.",
+    "promoted-attributes": "카드 속성",
+    "promoted-attributes-hint": "카드에 표시할 속성을 선택하고, 표시될 순서대로 드래그하여 정렬하세요.",
+    "new-template-name": "새 카드 템플릿",
+    "filter-placeholder": "보드 필터링...",
+    "card-outside-filter": "이 카드는 현재 필터링 범위를 벗어났습니다"
   },
   "dashboard_view": {
     "refresh-widget": "새로 고침",
@@ -4097,5 +4123,27 @@
     "in_picker": "글꼴 선택기에 표시",
     "offer_in_picker": "이 글꼴을 화면 설정에서 사용할 수 있도록 표시",
     "remove_from_picker": "이 글꼴을 화면 설정에서 더 이상 표시하지 않기"
+  },
+  "template_selection": {
+    "add-existing": "기존 템플릿 추가",
+    "add-title": "템플릿 추가",
+    "create": "새 템플릿 생성",
+    "new-name": "새 템플릿",
+    "menu": "템플릿 메뉴",
+    "remove": "목록에서 제거"
+  },
+  "item_picker": {
+    "title": "항목 선택",
+    "search": "검색…",
+    "nothing-found": "입력한 내용과 일치하는 항목이 없습니다."
+  },
+  "sortable_card": {
+    "reorder": "드래그하여 순서 변경"
+  },
+  "collection_filter": {
+    "placeholder": "필터링...",
+    "clear": "필터 지우기",
+    "fetch-error": "필터를 실행할 수 없습니다.",
+    "submit": "필터 적용"
   }
 }
