@@ -62,7 +62,7 @@ function AbstractTableOfContents<T extends RawHeading>({ headings, scrollToHeadi
     scrollToHeading(heading: T): void;
     activeHeadingId?: string | null;
 }) {
-    const tocRef = useRef<HTMLLIElement>(null);
+    const tocRef = useRef<HTMLSpanElement>(null);
     const nestedHeadings = buildHeadingTree(headings);
 
     useEffect(() => {
@@ -144,7 +144,7 @@ function buildHeadingTree(headings: RawHeading[]): HeadingsWithNesting[] {
     return root.children;
 }
 
-function useActiveHeading<T extends RawHeading>({ headings, scrollingContainer, getHeadingElement }: {
+export function useActiveHeading<T extends RawHeading>({ headings, scrollingContainer, getHeadingElement }: {
     headings: T[];
     scrollingContainer: HTMLElement | null;
     getHeadingElement: (heading: T) => HTMLElement | null
@@ -196,7 +196,10 @@ function useActiveHeading<T extends RawHeading>({ headings, scrollingContainer, 
             window.clearTimeout(timeoutId);
             scrollingContainer.removeEventListener("scroll", handleScroll);
         };
-    }, [scrollingContainer]);
+        // getHeadingElement must re-subscribe the listener: when the watchdog replaces the editor,
+        // .scrolling-container is an ancestor of the editor root and stays the same element, so
+        // scrollingContainer alone would keep the listener mapping through the destroyed editor.
+    }, [scrollingContainer, getHeadingElement]);
 
     return activeHeadingId;
 }
@@ -350,9 +353,8 @@ function extractTocFromTextEditor(editor: CKTextEditor) {
 
             // Assign a unique ID
             let tocId = item.getAttribute(TOC_ID) as string | undefined;
-            // When pressing Enter inside a heading, CKEditor splits the heading element
-            // and copies all attributes to the newly created element, which causes tocId
-            // to be duplicated and may lead to collisions in TOC identity.
+            // Splitting a heading with Enter copies its attributes onto the new element, so two
+            // headings can carry the same tocId and collide as React keys and as activeHeadingId.
             const tocIdExists = headings.some(h => h.id === tocId);
             if (!tocId || tocIdExists) {
                 tocId = randomString();
