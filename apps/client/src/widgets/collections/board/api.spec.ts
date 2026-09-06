@@ -15,7 +15,7 @@ import ws from "../../../services/ws";
 import { buildNote } from "../../../test/easy-froca";
 import { BoardViewData } from ".";
 import BoardApi, { getPendingWrites, PendingColumnWrites } from "./api";
-import { ColumnMap } from "./data";
+import { ColumnItem, ColumnMap } from "./data";
 import { BOARD_TEMPLATE_ID, DEFAULT_COLUMN_ICON, getStatusDefinition, INBOX_COLUMN } from "./columns";
 import { DEFAULT_CARD_TEMPLATES } from "./card_templates";
 
@@ -554,10 +554,80 @@ describe("BoardApi card operations", () => {
         // The target column is empty, so there is nothing to place it against.
         await api.moveWithinBoard(first.note.noteId, first.branch.branchId, 0, 1, "Done", "To Do");
         expect(branches.moveBeforeBranch).not.toHaveBeenCalled();
+        expect(branches.moveAfterBranch).not.toHaveBeenCalled();
 
         await api.moveWithinBoard(first.note.noteId, first.branch.branchId, 0, 1, "To Do", "Done");
         expect(branches.moveBeforeBranch)
             .toHaveBeenCalledWith([ first.branch.branchId ], items[1].branch.branchId);
+    });
+
+    /** A board whose "Done" column holds three cards, with a fourth waiting in "To Do". */
+    function createBoardWithSpareCard(shownInDone?: (done: ColumnItem[]) => ColumnItem[]) {
+        const board = buildNote({
+            title: "Board",
+            children: [
+                { title: "First", "#status": "Done" },
+                { title: "Second", "#status": "Done" },
+                { title: "Third", "#status": "Done" },
+                { title: "Spare", "#status": "To Do" }
+            ]
+        });
+
+        const items = board.getChildBranches().flatMap(branch => {
+            const note = froca.getNoteFromCache(branch.noteId);
+            return note ? [ { branch, note } ] : [];
+        });
+        const done = items.slice(0, 3);
+        const spare = items[3];
+        const allByColumn: ColumnMap = new Map([ [ "To Do", [ spare ] ], [ "Done", done ] ]);
+        const byColumn: ColumnMap = shownInDone
+            ? new Map([ [ "To Do", [ spare ] ], [ "Done", shownInDone(done) ] ])
+            : allByColumn;
+
+        const created = createApi(
+            {}, [ "To Do", "Done" ], board, "status", byColumn, allByColumn);
+        return { ...created, done, spare };
+    }
+
+    /**
+     * Crossing columns writes a placement too. Left with the tree position it came with, the card
+     * would rank among the target's cards by wherever it happened to sit before the drop.
+     */
+    it("files a card dropped past the last card of another column after it", async () => {
+        const { api, done, spare } = createBoardWithSpareCard();
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 3, "To Do", "Done");
+
+        expect(branches.moveBeforeBranch).not.toHaveBeenCalled();
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    it("files a card dropped into a column a filter empties after the cards it hides", async () => {
+        const { api, done, spare } = createBoardWithSpareCard(() => []);
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 0, "To Do", "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    it("files a card dropped past the last card shown after that one, not the hidden", async () => {
+        const { api, done, spare } = createBoardWithSpareCard((all) => [ all[0] ]);
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 1, "To Do", "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[0].branch.branchId);
+    });
+
+    it("sends a card to the true end of a column a filter narrows", async () => {
+        const { api, done, spare } = createBoardWithSpareCard((all) => [ all[0] ]);
+
+        await api.moveToColumnEnd(spare.note.noteId, spare.branch.branchId, "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
     });
 
     it("reorders within a column, and places past the last card after it", async () => {

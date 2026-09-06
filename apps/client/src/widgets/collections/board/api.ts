@@ -1126,18 +1126,19 @@ export default class BoardApi {
     /**
      * Moves a card to the end of another column, where a new one would go.
      *
-     * {@link moveWithinBoard} leaves a card crossing columns where the tree already had it, which
-     * is where a drop between two cards wants it. A card sent across by the keyboard is aimed at no
-     * card in particular, so it goes where the reader would look for it.
+     * A card sent across by the keyboard is aimed at no card in particular, unlike a drop, so it
+     * goes where the reader would look for it.
      */
     async moveToColumnEnd(noteId: string, branchId: string, targetColumn: string) {
         // What is already at the end, as far as this instance can know: nothing waits for the board
         // to redraw between two keystrokes, so the column map still shows the target as it was
         // before the card the last press sent. Anything sent since is remembered here instead, and
         // the memory lasts exactly as long as the map it stands in for, both being rebuilt by the
-        // refresh that catches up.
+        // refresh that catches up. Read off the unfiltered map, since the end of a column is behind
+        // the cards a filter is not showing.
+        const columnItems = (this.allByColumn ?? this.byColumn)?.get(targetColumn) ?? [];
         const last = this.sentToColumnEnd.get(targetColumn)
-            ?? (this.byColumn?.get(targetColumn) ?? []).at(-1)?.branch.branchId;
+            ?? columnItems.at(-1)?.branch.branchId;
 
         await this.changeColumn(noteId, targetColumn);
         if (last && last !== branchId) {
@@ -1170,6 +1171,11 @@ export default class BoardApi {
 
     async moveWithinBoard(noteId: string, sourceBranchId: string, sourceIndex: number, targetIndex: number, sourceColumn: string, targetColumn: string) {
         const targetItems = this.byColumn?.get(targetColumn) ?? [];
+        // What a card dropped past the last one drawn is placed after: the last card shown, or the
+        // last one the column holds when a filter is showing none of them. Read before the writes
+        // below, since a redraw between them hands this instance the map with the card moved.
+        const lastInTarget = (targetItems.at(-1)
+            ?? this.allByColumn?.get(targetColumn)?.at(-1))?.branch.branchId;
 
         const note = froca.getNoteFromCache(noteId);
         if (!note) return;
@@ -1178,10 +1184,11 @@ export default class BoardApi {
             // Moving to a different column
             await this.changeColumn(noteId, targetColumn);
 
-            // If there are items in the target column, reorder
-            if (targetItems.length > 0 && targetIndex < targetItems.length) {
+            if (targetIndex < targetItems.length) {
                 const targetBranch = targetItems[targetIndex].branch;
                 await branches.moveBeforeBranch([ sourceBranchId ], targetBranch.branchId);
+            } else if (lastInTarget && lastInTarget !== sourceBranchId) {
+                await branches.moveAfterBranch([ sourceBranchId ], lastInTarget);
             }
         } else if (sourceIndex !== targetIndex) {
             // Reordering within the same column
