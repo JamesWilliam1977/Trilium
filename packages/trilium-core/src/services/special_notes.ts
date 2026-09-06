@@ -10,31 +10,51 @@ import SearchContext from "./search/search_context.js";
 import { LBTPL_NOTE_LAUNCHER, LBTPL_CUSTOM_WIDGET, LBTPL_SPACER, LBTPL_SCRIPT } from "./hidden_subtree.js";
 import { t } from "i18next";
 import BNote from '../becca/entities/bnote.js';
-import { SaveLlmChatResponse, SaveSearchNoteResponse, SaveSqlConsoleResponse } from "@triliumnext/commons";
+import { InboxTargetKind, InboxTargetResponse, SaveLlmChatResponse, SaveSearchNoteResponse, SaveSqlConsoleResponse } from "@triliumnext/commons";
 
 function getInboxNote(date: string) {
+    const { note } = resolveInboxTarget();
+
+    return note ?? dateNoteService.getDayNote(date);
+}
+
+/**
+ * Decides where a quickly captured note goes, without creating anything. `getInboxNote()`
+ * creates the day note it falls back to, so callers that only want to name the destination —
+ * the note autocomplete labels its creation entry with it — go through this instead.
+ */
+function resolveInboxTarget(): { kind: InboxTargetKind; note?: BNote } {
     const workspaceNote = hoistedNoteService.getWorkspaceNote();
     if (!workspaceNote) {
         throw new Error("Unable to find workspace note");
     }
 
-    let inbox: BNote;
-
     if (!workspaceNote.isRoot()) {
-        inbox = workspaceNote.searchNoteInSubtree("#workspaceInbox");
-
-        if (!inbox) {
-            inbox = workspaceNote.searchNoteInSubtree("#inbox");
+        const workspaceInbox = workspaceNote.searchNoteInSubtree("#workspaceInbox");
+        if (workspaceInbox) {
+            return { kind: "workspaceInbox", note: workspaceInbox };
         }
 
-        if (!inbox) {
-            inbox = workspaceNote;
+        const inbox = workspaceNote.searchNoteInSubtree("#inbox");
+        if (inbox) {
+            return { kind: "inbox", note: inbox };
         }
-    } else {
-        inbox = attributeService.getNoteWithLabel("inbox") || dateNoteService.getDayNote(date);
+
+        return { kind: "workspaceRoot", note: workspaceNote };
     }
 
-    return inbox;
+    const inbox = attributeService.getNoteWithLabel("inbox");
+    if (inbox) {
+        return { kind: "inbox", note: inbox };
+    }
+
+    return { kind: "dayNote" };
+}
+
+function getInboxTarget(): InboxTargetResponse {
+    const { kind, note } = resolveInboxTarget();
+
+    return { kind, noteId: note?.noteId, title: note?.getTitleOrProtected() };
 }
 
 function createSqlConsole() {
@@ -389,6 +409,7 @@ function saveLlmChat(llmChatNoteId: string | null) {
 
 export default {
     getInboxNote,
+    getInboxTarget,
     createSqlConsole,
     saveSqlConsole,
     createSearchNote,

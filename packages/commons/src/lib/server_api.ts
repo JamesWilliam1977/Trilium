@@ -793,6 +793,19 @@ export type SimilarNoteResponse = SimilarNote[];
 
 export type SaveSearchNoteResponse = CloneResponse;
 
+/**
+ * Which rule decided where a quickly captured note goes. `dayNote` is the only one that
+ * names no note, because the day note is created when the capture happens.
+ */
+export type InboxTargetKind = "inbox" | "workspaceInbox" | "workspaceRoot" | "dayNote";
+
+/** Where `POST /api/notes/:id/children` would put a note captured into the inbox. */
+export interface InboxTargetResponse {
+    kind: InboxTargetKind;
+    noteId?: string;
+    title?: string;
+}
+
 /** A font file note carrying `#customFont`, as the font picker in the options lists it. */
 export interface UserFont {
     noteId: string;

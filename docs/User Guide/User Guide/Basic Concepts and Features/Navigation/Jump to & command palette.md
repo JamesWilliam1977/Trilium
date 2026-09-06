@@ -16,7 +16,9 @@ In addition to searching for notes, it is also possible to search for commands. 
 
 *   By default, when there is no text entered it will display the most recent notes.
 *   Using the keyboard, use the up or down arrow keys to navigate between items. Press <kbd>Enter</kbd> to open the desired note.
-*   If the note doesn't exist, it's possible to create it by typing the desired note title and selecting one of two options: _Create note_ places it in the <a class="reference-link" href="../Notes/Note%20Inbox.md">Note Inbox</a>, whereas _Create child note_ places it under the note that is currently open.
+*   If the note doesn't exist, it's possible to create it by typing the desired note title and selecting one of two options:
+    *   _Create note_ places it in the <a class="reference-link" href="../Notes/Note%20Inbox.md">Note Inbox</a>: the note labelled `#inbox`, or today's <a class="reference-link" href="../../Advanced%20Usage/Advanced%20Showcases/Day%20Notes.md">Day Notes</a> if there is none. While hoisted into a <a class="reference-link" href="Workspaces.md">Workspaces</a>, the workspace's own inbox is used, falling back to the workspace root itself.
+    *   _Create child note_ places it under the note that is currently open.
 
 ## Recent notes
 

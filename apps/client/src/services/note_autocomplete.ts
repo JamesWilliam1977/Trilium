@@ -1,4 +1,5 @@
 import type { MentionFeedObjectItem } from "@triliumnext/ckeditor5";
+import type { InboxTargetResponse } from "@triliumnext/commons";
 
 import appContext from "../components/app_context.js";
 import commandRegistry from "./command_registry.js";
@@ -8,6 +9,7 @@ import { t } from "./i18n.js";
 import noteCreateService from "./note_create.js";
 import server from "./server.js";
 import { escapeHtml } from "./utils.js";
+import { logError } from "./ws.js";
 
 // this key needs to have this value, so it's hit by the tooltip
 const SELECTED_NOTE_PATH_KEY = "data-note-path";
@@ -25,6 +27,30 @@ function getSearchDelay(notesCount: number): number {
     return delay;
 }
 let searchDelay = getSearchDelay(notesCount);
+
+async function getInboxTarget() {
+    try {
+        return await dateNoteService.getInboxTarget();
+    } catch (e) {
+        // A destination that cannot be named is not worth failing the dropdown over: the
+        // entry falls back to a label without one.
+        logError(`Unable to resolve the inbox target: ${e}`);
+        return null;
+    }
+}
+
+/** Labels the creation entry with the note the capture would land in. */
+function buildCreateNoteTitle(term: string, target: InboxTargetResponse | null) {
+    if (!target || (target.kind !== "dayNote" && !target.title)) {
+        return t("note_autocomplete.create-note", { term });
+    }
+
+    if (target.kind === "dayNote") {
+        return t("note_autocomplete.create-note-into-day-note", { term });
+    }
+
+    return t("note_autocomplete.create-note-into", { term, parentTitle: target.title });
+}
 
 // TODO: Deduplicate with server.
 export interface Suggestion {
@@ -126,18 +152,22 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
     const activeNoteId = appContext.tabManager.getActiveContextNoteId();
     const length = term.trim().length;
 
+    // Started before the search rather than after it, so naming the destination costs a request
+    // but no extra wait.
+    const pendingInboxTarget = length >= 1 && options.allowCreatingNotes ? getInboxTarget() : null;
+
     let results = await server.get<Suggestion[]>(`autocomplete?query=${encodeURIComponent(term)}&activeNoteId=${activeNoteId}&fastSearch=${fastSearch}`);
 
     options.fastSearch = true;
 
     // Both rows stay above the results: the CKEditor mention feed renders only the first
     // `mention.dropdownLimit` items, and the jQuery dropdown scrolls past as many as 200.
-    if (length >= 1 && options.allowCreatingNotes) {
+    if (pendingInboxTarget) {
         results = [
             {
                 action: "create-note",
                 noteTitle: term,
-                highlightedNotePathTitle: t("note_autocomplete.create-note", { term })
+                highlightedNotePathTitle: buildCreateNoteTitle(term, await pendingInboxTarget)
             } as Suggestion,
             {
                 action: "create-child-note",

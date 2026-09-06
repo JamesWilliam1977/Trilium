@@ -3,13 +3,17 @@ import $ from "jquery";
 
 // --- Mocks (hoisted above imports) ---
 
-const { triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote, getInboxNotePath, getAllCommands, searchCommands } = vi.hoisted(() => ({
+const { triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote, getInboxNotePath, getInboxTarget, translate, getAllCommands, searchCommands } = vi.hoisted(() => ({
     triggerCommand: vi.fn(),
     getActiveContextNoteId: vi.fn<() => string | null>(() => "activeNote"),
     getActiveContext: vi.fn<() => any>(() => ({ hoistedNoteId: "hoisted" })),
     chooseNoteType: vi.fn(),
     createNote: vi.fn(),
     getInboxNotePath: vi.fn<() => Promise<string | undefined>>(async () => "root/inbox"),
+    getInboxTarget: vi.fn<() => Promise<unknown>>(async () => ({ kind: "inbox", noteId: "inb", title: "Inbox" })),
+    // i18next is never initialised here, so the real `t` returns undefined. Echoing the key
+    // keeps the label assertions about which string is chosen rather than about its English.
+    translate: vi.fn((key: string, _opts?: Record<string, unknown>) => key),
     getAllCommands: vi.fn(() => [] as any[]),
     searchCommands: vi.fn(() => [] as any[])
 }));
@@ -29,7 +33,12 @@ vi.mock("./note_create.js", () => ({
 }));
 
 vi.mock("./date_notes.js", () => ({
-    default: { getInboxNotePath }
+    default: { getInboxNotePath, getInboxTarget }
+}));
+
+vi.mock("./i18n.js", async (importOriginal) => ({
+    ...(await importOriginal<typeof import("./i18n.js")>()),
+    t: translate
 }));
 
 vi.mock("./command_registry.js", () => ({
@@ -289,6 +298,40 @@ describe("autocompleteSource (via dataset)", () => {
         expect(rows[0].parentNoteId).toBeUndefined();
         expect(rows[1].parentNoteId).toBe("activeNote");
         expect(rows[2].noteTitle).toBe("Existing");
+    });
+
+    it.each([
+        { kind: "inbox", title: "Inbox" },
+        { kind: "workspaceInbox", title: "Work" },
+        { kind: "workspaceRoot", title: "Project" }
+    ])("names the $kind destination in the create-note row", async ({ kind, title }) => {
+        getInboxTarget.mockResolvedValueOnce({ kind, title });
+        server.get = vi.fn(async () => []) as typeof server.get;
+        const { dataset } = initAndGetSource({ allowCreatingNotes: true });
+        const rows = await runSource(dataset, "New");
+        expect(rows[0].highlightedNotePathTitle).toBe("note_autocomplete.create-note-into");
+        expect(translate).toHaveBeenCalledWith("note_autocomplete.create-note-into", { term: "New", parentTitle: title });
+    });
+
+    it("names the day note, which has no title of its own until it is created", async () => {
+        getInboxTarget.mockResolvedValueOnce({ kind: "dayNote" });
+        server.get = vi.fn(async () => []) as typeof server.get;
+        const { dataset } = initAndGetSource({ allowCreatingNotes: true });
+        const rows = await runSource(dataset, "New");
+        expect(rows[0].highlightedNotePathTitle).toBe("note_autocomplete.create-note-into-day-note");
+        expect(translate).toHaveBeenCalledWith("note_autocomplete.create-note-into-day-note", { term: "New" });
+    });
+
+    it.each([
+        { when: "the lookup fails", arrange: () => getInboxTarget.mockRejectedValueOnce(new Error("nope")) },
+        { when: "the destination has no title", arrange: () => getInboxTarget.mockResolvedValueOnce({ kind: "inbox" }) }
+    ])("falls back to an unqualified label when $when", async ({ arrange }) => {
+        arrange();
+        server.get = vi.fn(async () => []) as typeof server.get;
+        const { dataset } = initAndGetSource({ allowCreatingNotes: true });
+        const rows = await runSource(dataset, "New");
+        expect(rows[0].action).toBe("create-note");
+        expect(rows[0].highlightedNotePathTitle).toBe("note_autocomplete.create-note");
     });
 
     it("uses root as the child-note parent when there is no active note", async () => {

@@ -16,7 +16,7 @@ To create a note inbox, apply the `#inbox` [label](../../Advanced%20Usage/Attrib
 Only one note should carry this label. If there are multiple notes, only one will be used by the application.
 
 > [!NOTE]
-> If there is no inbox note, Trilium will fall back to today's [day note](../../Advanced%20Usage/Advanced%20Showcases/Day%20Notes.md) instead.
+> If there is no inbox note, Trilium will fall back to today's [day note](../../Advanced%20Usage/Advanced%20Showcases/Day%20Notes.md) instead, creating it and its calendar ancestors if they do not exist yet.
 
 ## Workspace inboxes
 

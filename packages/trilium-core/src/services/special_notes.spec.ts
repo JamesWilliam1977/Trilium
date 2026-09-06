@@ -189,6 +189,58 @@ describe("special_notes (core, real DB)", () => {
         });
     });
 
+    describe("getInboxTarget", () => {
+        it("names the #inbox note at the root workspace", () => {
+            const inbox = becca.getNoteOrThrow("root").getChildNotes()[0];
+            vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(inbox);
+
+            expect(specialNotes.getInboxTarget()).toEqual({
+                kind: "inbox",
+                noteId: inbox.noteId,
+                title: inbox.getTitleOrProtected()
+            });
+        });
+
+        it("reports the day note without creating it", () => {
+            vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(null);
+            const noteCountBefore = Object.keys(becca.notes).length;
+
+            // No CLS context: reaching getDayNote() would need one, so this also proves it is
+            // never called.
+            expect(specialNotes.getInboxTarget()).toEqual({ kind: "dayNote", noteId: undefined, title: undefined });
+            expect(Object.keys(becca.notes).length).toBe(noteCountBefore);
+        });
+
+        it("still reports the day note when the journal has been deleted, because the capture recreates it", () => {
+            // Nulls both labels this path consults, #inbox and #calendarRoot.
+            vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(null);
+
+            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "dayNote" });
+
+            // Not root: getInboxNote() rebuilds the calendar rather than falling back to it.
+            const created = getContext().init(() => specialNotes.getInboxNote("2026-05-29"));
+            expect(created.noteId).not.toBe("root");
+            expect(created.getParentNotes().some((p) => p.noteId === "root")).toBe(false);
+        });
+
+        it("distinguishes the workspace inbox, a plain inbox and the workspace root", () => {
+            const workspaceInbox = becca.getNoteOrThrow("root").getChildNotes()[0];
+            const plainInbox = becca.getNoteOrThrow("root").getChildNotes()[1];
+
+            const withBoth = makeWorkspaceStub({ "#workspaceInbox": workspaceInbox, "#inbox": plainInbox });
+            vi.spyOn(hoistedNoteService, "getWorkspaceNote").mockReturnValue(withBoth as any);
+            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "workspaceInbox", noteId: workspaceInbox.noteId });
+
+            const withPlainOnly = makeWorkspaceStub({ "#inbox": plainInbox });
+            vi.spyOn(hoistedNoteService, "getWorkspaceNote").mockReturnValue(withPlainOnly as any);
+            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "inbox", noteId: plainInbox.noteId });
+
+            const withNeither = makeWorkspaceStub({});
+            vi.spyOn(hoistedNoteService, "getWorkspaceNote").mockReturnValue(withNeither as any);
+            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "workspaceRoot", noteId: withNeither.noteId });
+        });
+    });
+
     describe("createLauncher", () => {
         it("creates a note launcher with the note-launcher template", () => {
             const { success, note } = getContext().init(() =>

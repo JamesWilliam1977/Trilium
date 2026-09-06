@@ -2978,6 +2978,8 @@
   "note_autocomplete": {
     "search-for": "Search for \"{{term}}\"",
     "create-note": "Create note \"{{term}}\"",
+    "create-note-into": "Create note \"{{term}}\" in {{parentTitle}}",
+    "create-note-into-day-note": "Create note \"{{term}}\" in today's day note",
     "create-child-note": "Create child note \"{{term}}\"",
     "insert-external-link": "Insert external link to \"{{term}}\"",
     "clear-text-field": "Clear text field",
