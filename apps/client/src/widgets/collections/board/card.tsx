@@ -2,10 +2,14 @@ import { memo } from "preact/compat";
 import {
     useCallback, useContext, useEffect, useLayoutEffect, useRef, useState
 } from "preact/hooks";
+
 import FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import BoardApi from "./api";
-import { BoardActionsContext, BoardPromotedAttributesContext, TitleEditor } from ".";
+import {
+    BoardActionsContext, BoardHighlightTokensContext, BoardKeptCardsContext,
+    BoardPromotedAttributesContext, TitleEditor
+} from ".";
 import { ContextMenuEvent } from "../../../menus/context_menu";
 import { openNoteContextMenu } from "./context_menu";
 import { t } from "../../../services/i18n";
@@ -15,6 +19,8 @@ import { FLIP_SETTLE_MS } from "../../react/flip";
 import {
     useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useTriliumEvent
 } from "../../react/hooks";
+import { TooltipIcon } from "../../react/Icon";
+import { HighlightedText } from "../../react/RawHtml";
 
 function Card({
     api,
@@ -60,6 +66,8 @@ function Card({
 }) {
     const { setBranchIdToEdit } = useContext(BoardActionsContext);
     const shownAttributes = useContext(BoardPromotedAttributesContext);
+    const highlightedTokens = useContext(BoardHighlightTokensContext);
+    const isOutsideFilter = useContext(BoardKeptCardsContext).has(note.noteId);
     // Tracks the `color` label, which the board does not redraw a card for.
     const colorClass = useNoteColorClass(note) || "";
     const editorRef = useRef<HTMLInputElement>(null);
@@ -192,7 +200,7 @@ function Card({
                 <>
                     <span className="title">
                         <span class={`icon ${icon}`} />
-                        {title}
+                        <HighlightedText text={title} highlightedTokens={highlightedTokens} />
                     </span>
                     <span
                         className="edit-icon icon bx bx-edit"
@@ -203,6 +211,7 @@ function Card({
                         note={note}
                         ignoredAttributes={[statusAttribute]}
                         shownAttributes={shownAttributes}
+                        badges={isOutsideFilter && <OutsideFilterBadge />}
                     />
                 </>
             ) : (
@@ -224,6 +233,23 @@ function Card({
             )}
         </div>
     )
+}
+
+/**
+ * Marks a card the filter does not match, drawn because it was just made here.
+ * `role="img"` is what lets `aria-label` name it: a span on its own cannot be named.
+ */
+export function OutsideFilterBadge() {
+    return (
+        <TooltipIcon
+            className="board-note-outside-filter"
+            icon="bx bx-time-five"
+            tooltip={t("board_view.card-outside-filter")}
+            tooltipPosition="bottom"
+            role="img"
+            aria-label={t("board_view.card-outside-filter")}
+        />
+    );
 }
 
 /**

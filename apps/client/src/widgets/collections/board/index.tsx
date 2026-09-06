@@ -9,6 +9,8 @@ import {
     Dispatch, StateUpdater, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState
 } from "preact/hooks";
 
+import type { HighlightedTokenInfo } from "@triliumnext/commons";
+
 import FNote from "../../../entities/fnote";
 import { t } from "../../../services/i18n";
 import type LoadResults from "../../../services/load_results";
@@ -34,6 +36,7 @@ import ActionButton from "../../react/ActionButton";
 import { IconPickerButton } from "../../react/IconPicker";
 import { useDragPan } from "../../react/drag_pan";
 import { FLIP_SETTLE_MS, useFlip } from "../../react/flip";
+import { CollectionFilterInput, useCollectionFilter } from "../collection_filter";
 import { ViewModeProps } from "../interface";
 import Api, { getPendingWrites, PendingColumnWrites, settleColumn } from "./api";
 import { useBoardDrag } from "./board_drag";
@@ -45,7 +48,9 @@ import { currentCardTemplate, DEFAULT_CARD_TEMPLATES } from "./card_templates";
 import ColumnLimitDialog from "./column_limit";
 import BoardProperties from "./properties";
 import { openBoardContextMenu, openCreateColumnMenu } from "./context_menu";
-import { applyCardMove, ColumnMap, getBoardData } from "./data";
+import {
+    applyCardMove, ColumnMap, filterColumnMap, getBoardData, unfilteredCardIndex
+} from "./data";
 import { useBoardKeyboard } from "./keyboard";
 
 /**
@@ -73,6 +78,8 @@ export interface BoardViewData {
      * name is shown after the ones it does; see {@link resolvePromotedAttributes}.
      */
     promotedAttributes?: PromotedAttributeSetting[];
+    /** The search query the board is narrowed to, absent while no filter is active. */
+    filterQuery?: string;
 }
 
 export interface BoardColumnData {
@@ -194,6 +201,15 @@ export const BoardDragStateContext = createContext<BoardDragState>({
 });
 
 /**
+ * The tokens the active filter matched by, which the cards highlight in their titles. A context
+ * rather than a prop, so a memoized card is not redrawn for it during a drag.
+ */
+export const BoardHighlightTokensContext = createContext<HighlightedTokenInfo[] | null>(null);
+
+/** The cards drawn although the filter does not match them, which say as much on their face. */
+export const BoardKeptCardsContext = createContext<Set<string>>(new Set());
+
+/**
  * What the board answers with when asked for contextual keyboard help. Every entry is a key the
  * board handles itself (see `keyboard.ts` and the card and column handlers), none of them
  * rebindable, so each is listed literally rather than through a registered action.
@@ -255,7 +271,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const [ statusAttributeWithPrefix ] = useNoteLabelWithDefault(parentNote, "board:groupBy", DEFAULT_GROUP_BY);
     const [ includeArchived ] = useNoteLabelBoolean(parentNote, "includeArchived");
     const [ inboxEnabled ] = useNoteLabelBoolean(parentNote, "enableInboxColumn");
-    const [ byColumn, setByColumn ] = useState<ColumnMap>();
+    /** Every card the board holds, which an active filter narrows before the cards are drawn. */
+    const [ allByColumn, setAllByColumn ] = useState<ColumnMap>();
     const [ columns, setColumns ] = useState<string[]>();
     const [ isInRelationMode, setIsRelationMode ] = useState(false);
     const [ draggedCard, setDraggedCard ] = useState<CardDrag | null>(null);
@@ -328,17 +345,33 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     // them for a move that touched one. Another board takes a new one, since this instance is
     // reused across boards and the api holds that board's record of the writes in flight.
     const apiRef = useRef<{ board: string, api: Api }>();
+    const persistFilterQuery = useCallback(
+        (query: string) => apiRef.current?.api.setFilterQuery(query), []);
+    const filter = useCollectionFilter(parentNote, {
+        persistedQuery: viewConfig?.filterQuery,
+        onQueryChanged: persistFilterQuery,
+        collectionNoteIds: noteIds
+    });
+    // The cards as drawn. Derived rather than held, so what is shown cannot fall behind what the
+    // filter matches, and withheld until a query stored in `board.json` has said what it matches.
+    const byColumn = useMemo(
+        () => (allByColumn && !filter.isResolvingStoredQuery
+            ? filterColumnMap(allByColumn, filter.shownNoteIds)
+            : undefined),
+        [ allByColumn, filter.shownNoteIds, filter.isResolvingStoredQuery ]);
+
     if (!apiRef.current || apiRef.current.board !== boardIdentity) {
         apiRef.current = {
             board: boardIdentity,
             api: new Api(
                 byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
-                saveConfig, setBranchIdToEdit, pendingRenamesRef.current.writes, statusDefinition)
+                saveConfig, setBranchIdToEdit, pendingRenamesRef.current.writes, statusDefinition,
+                allByColumn, filter.keepNote)
         };
     } else {
         apiRef.current.api.update(
             byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
-            saveConfig, setBranchIdToEdit, statusDefinition);
+            saveConfig, setBranchIdToEdit, statusDefinition, allByColumn, filter.keepNote);
     }
     const api = apiRef.current.api;
     // Every member is one of useState's own setters, so this value is built once and never changes
@@ -461,7 +494,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         getBoardData(
             parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived,
             statusDefinition?.options ?? [], pendingRenamesRef.current.writes.renames, inboxEnabled)
-            .then(({ byColumn, columns, newPersistedData, isInRelationMode, settledRenames }) => {
+            .then(({
+                byColumn: allCards, columns, newPersistedData, isInRelationMode, settledRenames
+            }) => {
                 if (refreshId !== refreshSeqRef.current) {
                     return;
                 }
@@ -470,7 +505,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                     settleColumn(pendingRenamesRef.current.writes, settled);
                 }
 
-                setByColumn(byColumn);
+                setAllByColumn(allCards);
                 setIsRelationMode(isInRelationMode);
                 setColumns(columns);
 
@@ -537,11 +572,15 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         },
         onCardEnd: (card, position) => {
             const branchId = byColumn?.get(card.fromColumn)?.[card.index]?.branch.branchId;
-            if (position && branchId && byColumn) {
-                // Drawn where it landed at once, and held there until both writes are in: each of
-                // them lands a redraw, and the first would show the card at the top of the column.
-                setByColumn(applyCardMove(
-                    byColumn, card.noteId, card.fromColumn, position.column, position.index));
+            if (position && branchId && byColumn && allByColumn) {
+                // Drawn at once, into `allByColumn` since that is what `byColumn` derives from, at
+                // the index `unfilteredCardIndex` translates rather than the visible drop index.
+                setAllByColumn(applyCardMove(
+                    allByColumn, card.noteId, card.fromColumn, position.column,
+                    unfilteredCardIndex(
+                        byColumn.get(position.column) ?? [],
+                        allByColumn.get(position.column) ?? [],
+                        position.index)));
                 movesInFlight.current++;
                 // Any refresh already on its way is about the board as it stood before the drop,
                 // and would put the card back where it came from as it resolves.
@@ -710,9 +749,17 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
 
     return (
         <div className="board-view">
-            <CollectionProperties note={parentNote} />
+            <CollectionProperties
+                note={parentNote}
+                rightChildren={<CollectionFilterInput
+                    filter={filter}
+                    placeholder={t("board_view.filter-placeholder")}
+                />}
+            />
             <BoardActionsContext.Provider value={boardActions}>
                 <BoardPromotedAttributesContext.Provider value={shownAttributes}>
+                <BoardHighlightTokensContext.Provider value={filter.highlightedTokens}>
+                <BoardKeptCardsContext.Provider value={filter.keptNoteIds}>
                 <BoardDragStateContext.Provider value={boardDragState}>
                     {byColumn && columns && <div
                         ref={containerRef}
@@ -764,6 +811,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                                     onFocusColumn={focusColumn}
                                     onFocusCard={focusCard}
                                     columnItems={byColumn.get(column)}
+                                    totalCount={allByColumn?.get(column)?.length}
                                     isNew={column === createdColumn}
                                 />
                             </Fragment>
@@ -811,6 +859,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                         )}
                     </div>}
                 </BoardDragStateContext.Provider>
+                </BoardKeptCardsContext.Provider>
+                </BoardHighlightTokensContext.Provider>
                 </BoardPromotedAttributesContext.Provider>
             </BoardActionsContext.Provider>
         </div>

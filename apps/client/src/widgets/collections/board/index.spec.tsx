@@ -20,6 +20,7 @@ import froca from "../../../services/froca";
 import attributes from "../../../services/attributes";
 import { executeBulkActions } from "../../../services/bulk_action";
 import LoadResults from "../../../services/load_results";
+import searchService from "../../../services/search";
 import { buildNote } from "../../../test/easy-froca";
 import { ParentComponent } from "../../react/react_utils";
 import BoardView, { BoardViewData } from ".";
@@ -106,6 +107,16 @@ vi.mock("../../../services/bulk_action", () => ({
         }
     })
 }));
+
+vi.mock("../../../services/search", () => ({
+    default: {
+        searchInSubtree: vi.fn(),
+        searchForNoteIds: vi.fn(async () => []),
+        searchForNotes: vi.fn(async () => [])
+    }
+}));
+
+const searchInSubtree = vi.mocked(searchService.searchInSubtree);
 
 /** What a card is made from until another template is picked: the first the board offers. */
 function textTemplate() {
@@ -3291,4 +3302,193 @@ describe("the promoted attributes a card shows", () => {
         return [ ...container.querySelectorAll(".board-note .user-attribute") ]
             .map(element => element.textContent);
     }
+});
+
+describe("Board filtering", () => {
+    let container: HTMLElement;
+    let host: Component;
+
+    afterEach(() => {
+        vi.useRealTimers();
+        saved.length = 0;
+        render(null, container);
+        container.remove();
+    });
+
+    /** A board of four cards over two columns, opened with a stored filter query. */
+    async function setup({ matched, tokens = [], limit }: {
+        matched: string[];
+        tokens?: { token: string; type: "plain" }[];
+        limit?: number;
+    }) {
+        searchInSubtree.mockReset();
+        searchInSubtree.mockResolvedValue({
+            searchResultNoteIds: matched,
+            highlightedTokens: tokens,
+            error: null
+        });
+
+        const note = buildNote({
+            title: "Board",
+            "#collection": "",
+            "#viewType": "board",
+            children: [
+                { id: "filtered1", title: "First", "#status": "To Do" },
+                { id: "filtered2", title: "Second", "#status": "To Do" },
+                { id: "filtered3", title: "Third", "#status": "To Do" },
+                { id: "filtered4", title: "Fourth", "#status": "Done" }
+            ]
+        });
+
+        host = new Component();
+        container = document.body.appendChild(document.createElement("div"));
+        await act(async () => {
+            render(
+                <ParentComponent.Provider value={host}>
+                    <Harness
+                        note={note}
+                        noteIds={[ ...note.getChildNoteIds() ]}
+                        initialConfig={{
+                            columns: [ { value: "To Do", ...(limit ? { limit } : {}) },
+                                { value: "Done" } ],
+                            filterQuery: "#urgent"
+                        }}
+                    />
+                </ParentComponent.Provider>,
+                container
+            );
+        });
+        await act(async () => { await flush(); });
+        await act(async () => { await flush(); });
+
+        return note;
+    }
+
+    function cardTitles(column: number) {
+        const columns = [ ...container.querySelectorAll(".board-column") ];
+        return [ ...columns[column].querySelectorAll(".board-note .title") ]
+            .map(el => el.textContent);
+    }
+
+    /** A branch change under the board, which is what re-runs an active filter. */
+    function branchChange(parentNoteId: string, noteId: string) {
+        const results = new LoadResults([ {
+            entityName: "branches",
+            entityId: "branch1",
+            entity: { branchId: "branch1", parentNoteId, noteId }
+        } as never ]);
+        results.addBranch("branch1", "other");
+        return results;
+    }
+
+    it("shows only the matched cards, in their own order, keeping every column", async () => {
+        // The matches arrive in score order; the board must keep branch order regardless.
+        const note = await setup({ matched: [ "filtered3", "filtered1" ] });
+
+        expect(searchInSubtree).toHaveBeenCalledWith("#urgent", note.noteId);
+        expect(cardTitles(0)).toEqual([ "First", "Third" ]);
+        expect(cardTitles(1)).toEqual([]);
+        expect(container.querySelectorAll(".board-column")).toHaveLength(2);
+    });
+
+    it("counts the visible cards in the badge while the limit reads the real column", async () => {
+        await setup({ matched: [ "filtered1" ], limit: 2 });
+
+        const column = container.querySelector(".board-column");
+        // One of three cards is shown, and three stand against the limit of two.
+        expect(column?.querySelector(".counter-badge")?.textContent).toBe("1/2");
+        expect(column?.classList.contains("over-limit")).toBe(true);
+    });
+
+    /**
+     * The cards drawn are derived from what the filter matches rather than held beside it, so a
+     * re-run's answer cannot be left unapplied by whatever else the board is doing at the time.
+     */
+    it("draws what a re-run matches", async () => {
+        const note = await setup({ matched: [ "filtered1" ] });
+        expect(cardTitles(0)).toEqual([ "First" ]);
+
+        searchInSubtree.mockResolvedValue({
+            searchResultNoteIds: [ "filtered2", "filtered3" ],
+            highlightedTokens: [],
+            error: null
+        });
+
+        // A change under the board re-runs the filter, after the wait that collects a run of them.
+        vi.useFakeTimers();
+        await act(async () => {
+            await host.handleEvent("entitiesReloaded", {
+                loadResults: branchChange(note.noteId, "filtered2")
+            });
+            await vi.advanceTimersByTimeAsync(400);
+        });
+
+        expect(cardTitles(0)).toEqual([ "Second", "Third" ]);
+    });
+
+    /**
+     * A board opened onto a stored query draws nothing until the query has said what it matches,
+     * rather than drawing every card and then taking most of them away.
+     */
+    it("draws no cards until the stored query has resolved", async () => {
+        let resolveSearch: (response: unknown) => void = () => {};
+        searchInSubtree.mockReset();
+        searchInSubtree.mockReturnValue(
+            new Promise(resolve => { resolveSearch = resolve; }) as never);
+
+        const note = buildNote({
+            title: "Board",
+            "#collection": "",
+            "#viewType": "board",
+            children: [
+                { id: "held1", title: "First", "#status": "To Do" },
+                { id: "held2", title: "Second", "#status": "To Do" }
+            ]
+        });
+
+        host = new Component();
+        container = document.body.appendChild(document.createElement("div"));
+        await act(async () => {
+            render(
+                <ParentComponent.Provider value={host}>
+                    <Harness
+                        note={note}
+                        noteIds={[ ...note.getChildNoteIds() ]}
+                        initialConfig={{
+                            columns: [ { value: "To Do" } ],
+                            filterQuery: "#urgent"
+                        }}
+                    />
+                </ParentComponent.Provider>,
+                container
+            );
+        });
+        await act(async () => { await flush(); });
+        await act(async () => { await flush(); });
+
+        expect(container.querySelectorAll(".board-column")).toHaveLength(0);
+        expect(container.querySelectorAll(".board-note")).toHaveLength(0);
+
+        await act(async () => {
+            resolveSearch({
+                searchResultNoteIds: [ "held2" ],
+                highlightedTokens: [],
+                error: null
+            });
+            await flush();
+        });
+        await act(async () => { await flush(); });
+
+        expect(cardTitles(0)).toEqual([ "Second" ]);
+    });
+
+    it("marks the matched tokens in the card titles", async () => {
+        await setup({
+            matched: [ "filtered1" ],
+            tokens: [ { token: "First", type: "plain" } ]
+        });
+
+        const marks = [ ...container.querySelectorAll(".board-note .title .ck-find-result") ];
+        expect(marks.map(el => el.textContent)).toEqual([ "First" ]);
+    });
 });
