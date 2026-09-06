@@ -3,10 +3,12 @@ import FNote from "../../../entities/fnote";
 import { INBOX_COLUMN, resolveBoardColumns } from "./columns";
 import { BoardColumnData, BoardViewData } from "./index";
 
-export type ColumnMap = Map<string, {
+export interface ColumnItem {
     branch: FBranch;
     note: FNote;
-}[]>;
+}
+
+export type ColumnMap = Map<string, ColumnItem[]>;
 
 /**
  * The columns as they stand once a card has moved, for drawing the outcome before the writes land.
@@ -38,6 +40,47 @@ export function applyCardMove(
     next.set(to, target);
 
     return next;
+}
+
+/**
+ * The columns with only the cards in `shownNoteIds`, keeping their order relative to each other.
+ * Every column is kept, since a filter narrows what is drawn and nothing else.
+ */
+export function filterColumnMap(
+    byColumn: ColumnMap, shownNoteIds: Set<string> | null
+): ColumnMap {
+    if (!shownNoteIds) {
+        return byColumn;
+    }
+
+    const filtered: ColumnMap = new Map();
+    for (const [ column, items ] of byColumn) {
+        filtered.set(column, items.filter(item => shownNoteIds.has(item.note.noteId)));
+    }
+    return filtered;
+}
+
+/**
+ * Where a card dropped among the cards on screen goes in the full column.
+ *
+ * @param shown the target column as it is drawn, counting the moved card where it stays in place.
+ * @param all the same column with every card it holds.
+ * @param index where the card goes among the ones drawn.
+ */
+export function unfilteredCardIndex(shown: ColumnItem[], all: ColumnItem[], index: number) {
+    const placeOf = (item: ColumnItem | undefined) => (item
+        ? all.findIndex(other => other.branch.branchId === item.branch.branchId)
+        : -1);
+
+    const before = placeOf(shown[index]);
+    if (before >= 0) {
+        return before;
+    }
+
+    // Dropped past the last card on screen, which is what the move is written against; a hidden
+    // card below it stays below.
+    const after = placeOf(shown.at(-1));
+    return after >= 0 ? after + 1 : all.length;
 }
 
 /**

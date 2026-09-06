@@ -349,6 +349,13 @@ export interface HighlightedTokenInfo {
     type: "plain" | "regex" | "fuzzy";
 }
 
+/** Response for `GET /api/search/:searchString?includeTokens=true`. */
+export interface SearchWithTokensResponse {
+    searchResultNoteIds: string[];
+    highlightedTokens: HighlightedTokenInfo[];
+    error: string | null;
+}
+
 /** Request body for `POST /api/search-note/:noteId/result-details` (max 100 noteIds). */
 export interface SearchResultDetailsRequest {
     noteIds: string[];
