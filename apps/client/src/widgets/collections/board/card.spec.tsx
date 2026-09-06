@@ -20,10 +20,20 @@ import { buildNote } from "../../../test/easy-froca";
 import { ParentComponent } from "../../react/react_utils";
 import BoardApi from "./api";
 import BoardView from ".";
+import { OutsideFilterBadge } from "./card";
 
 // The card menu opens with the shared link items, which reach for the active note context.
 vi.mock("../../../menus/link_context_menu", () => ({
     default: { getItems: () => [], handleLinkContextMenuItem: () => {} }
+}));
+
+// i18next is never initialised under test, so every label would read as undefined. The awaited
+// promise is what `command_registry` imports from here, which the board pulls in through the
+// autocomplete field.
+vi.mock("../../../services/i18n", () => ({
+    t: (key: string) => key,
+    translationsInitializedPromise: Promise.resolve(),
+    getCurrentLanguage: () => "en"
 }));
 
 /** Counts how often each card has drawn, which is what the memo boundary around it decides. */
@@ -373,6 +383,26 @@ describe("Board card", () => {
 
     const cardClasses = (noteId: string) => card(noteId).className;
     const cardIcon = (noteId: string) => card(noteId).querySelector(".title .icon")?.className ?? "";
+});
+
+/**
+ * The clock a card carries while it is drawn although the filter misses it. The tooltip reaches
+ * only a reader who points at it, so the name has to be on the element as well.
+ */
+describe("OutsideFilterBadge", () => {
+    it("names itself for assistive technology", () => {
+        const container = document.body.appendChild(document.createElement("div"));
+        try {
+            act(() => render(<OutsideFilterBadge />, container));
+
+            const badge = container.querySelector(".board-note-outside-filter");
+            expect(badge?.getAttribute("role")).toBe("img");
+            expect(badge?.getAttribute("aria-label")).toBe("board_view.card-outside-filter");
+        } finally {
+            render(null, container);
+            container.remove();
+        }
+    });
 });
 
 /** Drains the async chain inside the board's `refresh()` plus any re-render it queues. */

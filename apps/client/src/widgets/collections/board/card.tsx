@@ -1,4 +1,3 @@
-import type { Tooltip } from "bootstrap";
 import { memo } from "preact/compat";
 import {
     useCallback, useContext, useEffect, useLayoutEffect, useRef, useState
@@ -18,9 +17,9 @@ import UserAttributesDisplay from "../../attribute_widgets/UserAttributesList";
 import { parseNavigationStateFromUrl } from "../../../services/link";
 import { FLIP_SETTLE_MS } from "../../react/flip";
 import {
-    useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useStaticTooltip,
-    useTriliumEvent
+    useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useTriliumEvent
 } from "../../react/hooks";
+import { TooltipIcon } from "../../react/Icon";
 import { HighlightedText } from "../../react/RawHtml";
 
 function Card({
@@ -236,19 +235,24 @@ function Card({
     )
 }
 
-/** Marks a card drawn although the filter does not match it, which one just made here is. */
-function OutsideFilterBadge() {
-    const badgeRef = useRef<HTMLSpanElement>(null);
-    useStaticTooltip(badgeRef, OUTSIDE_FILTER_TOOLTIP);
-
-    return <span ref={badgeRef} className="board-note-outside-filter icon bx bx-time-five" />;
+/**
+ * Marks a card drawn although the filter does not match it, which one just made here is.
+ *
+ * `role="img"` is what carries the label to a reader: a bare span has no role that a name can be
+ * given to, and the tooltip alone reaches nobody who is not pointing at it.
+ */
+export function OutsideFilterBadge() {
+    return (
+        <TooltipIcon
+            className="board-note-outside-filter"
+            icon="bx bx-time-five"
+            tooltip={t("board_view.card-outside-filter")}
+            tooltipPosition="bottom"
+            role="img"
+            aria-label={t("board_view.card-outside-filter")}
+        />
+    );
 }
-
-const OUTSIDE_FILTER_TOOLTIP: Partial<Tooltip.Options> = {
-    title: t("board_view.card-outside-filter"),
-    placement: "bottom",
-    animation: false
-};
 
 /**
  * Memoized because a board holds hundreds of these and most redraws change none of them: a drag
