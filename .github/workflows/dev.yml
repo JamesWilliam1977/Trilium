@@ -142,6 +142,7 @@ jobs:
 
       - name: Upload client test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-client.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -165,6 +166,7 @@ jobs:
 
       - name: Upload desktop test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-desktop.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -188,6 +190,7 @@ jobs:
 
       - name: Upload commons test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-commons.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -211,6 +214,7 @@ jobs:
 
       - name: Upload codemirror test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-codemirror.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -234,6 +238,7 @@ jobs:
 
       - name: Upload highlightjs test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-highlightjs.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -257,6 +262,7 @@ jobs:
 
       - name: Upload pdfjs-viewer test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-pdfjs-viewer.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -326,6 +332,7 @@ jobs:
 
       - name: Upload server test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-server.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -379,6 +386,7 @@ jobs:
 
       - name: Upload standalone test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-standalone.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -517,6 +525,7 @@ jobs:
 
       - name: Upload ckeditor5 test results to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        if: ${{ !cancelled() && steps.test-ckeditor5.outcome != 'skipped' }}
         with:
           report_type: test_results
           token: ${{ secrets.CODECOV_TOKEN }}
