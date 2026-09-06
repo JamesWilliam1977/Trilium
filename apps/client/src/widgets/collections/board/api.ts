@@ -118,7 +118,14 @@ export default class BoardApi {
         private setBranchIdToEdit: (branchId: string | undefined) => void,
         private pending: PendingColumnWrites =
             { renames: new Map(), claims: new Map(), inFlight: 0 },
-        private statusDefinition?: BoardStatusDefinition
+        private statusDefinition?: BoardStatusDefinition,
+        /**
+         * Every card, when `byColumn` is narrowed by a filter. Bulk operations read this one, so a
+         * column operation reaches the cards the filter leaves out too.
+         */
+        private allByColumn?: ColumnMap,
+        /** Draws a card the active filter does not match. See {@link keepInView}. */
+        private keepNote?: (noteId: string) => void
     ) {
         this.viewConfigSource = viewConfig;
         this.viewConfig = viewConfig ?? {};
@@ -144,7 +151,9 @@ export default class BoardApi {
         viewConfig: BoardViewData | undefined,
         saveConfig: (newConfig: BoardViewData) => void,
         setBranchIdToEdit: (branchId: string | undefined) => void,
-        statusDefinition?: BoardStatusDefinition
+        statusDefinition?: BoardStatusDefinition,
+        allByColumn?: ColumnMap,
+        keepNote?: (noteId: string) => void
     ) {
         // What was sent to the end of a column stands in for what the map does not show yet, so it
         // is given up with the map it stands in for. Kept across a refresh, it would name a branch
@@ -154,6 +163,8 @@ export default class BoardApi {
         }
 
         this.byColumn = byColumn;
+        this.allByColumn = allByColumn;
+        this.keepNote = keepNote;
         this.columns = columns;
         this.parentNote = parentNote;
         // Only a config the board has actually replaced, since `storeColumns` moves this one ahead
@@ -180,9 +191,7 @@ export default class BoardApi {
         column: string, title: string, placement: CardPlacement = "bottom", icon?: string,
         template: NoteTypeOption | undefined = this.getCurrentCardTemplate()
     ) {
-        const first = placement === "top"
-            ? this.byColumn?.get(column)?.[0]?.branch.branchId
-            : undefined;
+        const first = placement === "top" ? this.firstInColumn(column) : undefined;
 
         try {
             const { note } = await note_create.createNote(this.parentNote.noteId, {
@@ -194,6 +203,7 @@ export default class BoardApi {
                 ...(first ? { target: "before", targetBranchId: first } : {})
             });
 
+            this.keepInView(note?.noteId);
             return note?.noteId;
         } catch (error) {
             console.error("Failed to create new item:", error);
@@ -217,6 +227,16 @@ export default class BoardApi {
         const { note } = await this.insertRowAtPosition(
             column, beforeBranchId, "before", title, icon, template);
         return note.noteId;
+    }
+
+    /**
+     * Reports a card the board has just gained, which `useCollectionFilter` draws and marks even
+     * when the query misses it. Without this, adding a card to a filtered board shows nothing.
+     */
+    private keepInView(noteId: string | undefined) {
+        if (noteId) {
+            this.keepNote?.(noteId);
+        }
     }
 
     /** What a new card carries besides its title: the column it lands in, and its icon. */
@@ -291,6 +311,7 @@ export default class BoardApi {
             await this.moveIntoPlace(noteId, beforeBranchId);
         }
 
+        this.keepInView(noteId);
         return true;
     }
 
@@ -448,8 +469,10 @@ export default class BoardApi {
     }
 
     async removeColumn(column: string) {
-        // Remove the value from the notes.
-        const noteIds = this.byColumn?.get(column)?.map(item => item.note.noteId) || [];
+        // Remove the value from the notes. Read off the unfiltered map where there is one, so the
+        // value also comes off the cards an active filter is not showing.
+        const items = (this.allByColumn ?? this.byColumn)?.get(column);
+        const noteIds = items?.map(item => item.note.noteId) || [];
 
         const action: BulkAction = this.isRelationMode
             ? { name: "deleteRelation", relationName: this.statusAttribute }
@@ -674,6 +697,15 @@ export default class BoardApi {
         }
 
         this.storeConfig({ templates });
+    }
+
+    /** Stores the query the board is narrowed to, or clears it when given an empty one. */
+    setFilterQuery(query: string) {
+        if ((query || undefined) === this.viewConfig?.filterQuery) {
+            return;
+        }
+
+        this.storeConfig({ filterQuery: query || undefined });
     }
 
     /** Remembers what the last card was made from, so the next one is made from it too. */
@@ -1040,6 +1072,7 @@ export default class BoardApi {
             throw new Error("Failed to create note");
         }
 
+        this.keepInView(note.noteId);
         return { note, branch };
     }
 
@@ -1068,9 +1101,11 @@ export default class BoardApi {
      * named by the server and has to be in froca before it can be placed.
      */
     async duplicateItem(noteId: string, branchId: string) {
-        const { branch } = await server.post<{ branch: { branchId: string } }>(
-            `notes/${noteId}/duplicate/${this.parentNote.noteId}`);
+        const { note, branch } = await server.post<
+            { note: { noteId: string }, branch: { branchId: string } }>(
+                `notes/${noteId}/duplicate/${this.parentNote.noteId}`);
 
+        this.keepInView(note?.noteId);
         await ws.waitForMaxKnownEntityChangeId();
         await branches.moveAfterBranch([ branch.branchId ], branchId);
     }
@@ -1105,13 +1140,7 @@ export default class BoardApi {
         return attributes.removeOwnedLabelByName(note, this.statusAttribute);
     }
 
-    /**
-     * Moves a card to the end of another column, where a new one would go.
-     *
-     * {@link moveWithinBoard} leaves a card crossing columns where the tree already had it, which
-     * is where a drop between two cards wants it. A card sent across by the keyboard is aimed at no
-     * card in particular, so it goes where the reader would look for it.
-     */
+    /** Moves a card to the end of another column, where a card sent by the keyboard belongs. */
     async moveToColumnEnd(noteId: string, branchId: string, targetColumn: string) {
         // What is already at the end, as far as this instance can know: nothing waits for the board
         // to redraw between two keystrokes, so the column map still shows the target as it was
@@ -1119,7 +1148,7 @@ export default class BoardApi {
         // the memory lasts exactly as long as the map it stands in for, both being rebuilt by the
         // refresh that catches up.
         const last = this.sentToColumnEnd.get(targetColumn)
-            ?? (this.byColumn?.get(targetColumn) ?? []).at(-1)?.branch.branchId;
+            ?? this.lastInColumn(targetColumn);
 
         await this.changeColumn(noteId, targetColumn);
         if (last && last !== branchId) {
@@ -1132,6 +1161,23 @@ export default class BoardApi {
     /** Whether a card stands at the head of its column, with nowhere left to be moved up to. */
     isFirstInColumn(branchId: string, column: string) {
         return this.byColumn?.get(column)?.[0]?.branch.branchId === branchId;
+    }
+
+    /**
+     * The card a new or arriving one is placed after: the last one drawn, or `allByColumn`'s last
+     * where a filter draws none. Placement follows the cards on screen wherever there are any.
+     */
+    private lastInColumn(column: string) {
+        const shown = this.byColumn?.get(column) ?? [];
+        const items = shown.length ? shown : this.allByColumn?.get(column) ?? [];
+        return items.at(-1)?.branch.branchId;
+    }
+
+    /** The counterpart of {@link lastInColumn}, for a card made at the head of a column. */
+    private firstInColumn(column: string) {
+        const shown = this.byColumn?.get(column) ?? [];
+        const items = shown.length ? shown : this.allByColumn?.get(column) ?? [];
+        return items[0]?.branch.branchId;
     }
 
     /**
@@ -1152,6 +1198,9 @@ export default class BoardApi {
 
     async moveWithinBoard(noteId: string, sourceBranchId: string, sourceIndex: number, targetIndex: number, sourceColumn: string, targetColumn: string) {
         const targetItems = this.byColumn?.get(targetColumn) ?? [];
+        // Read before the writes below, since a redraw between them hands this instance the map
+        // with the card already moved.
+        const lastInTarget = this.lastInColumn(targetColumn);
 
         const note = froca.getNoteFromCache(noteId);
         if (!note) return;
@@ -1160,10 +1209,11 @@ export default class BoardApi {
             // Moving to a different column
             await this.changeColumn(noteId, targetColumn);
 
-            // If there are items in the target column, reorder
-            if (targetItems.length > 0 && targetIndex < targetItems.length) {
+            if (targetIndex < targetItems.length) {
                 const targetBranch = targetItems[targetIndex].branch;
                 await branches.moveBeforeBranch([ sourceBranchId ], targetBranch.branchId);
+            } else if (lastInTarget && lastInTarget !== sourceBranchId) {
+                await branches.moveAfterBranch([ sourceBranchId ], lastInTarget);
             }
         } else if (sourceIndex !== targetIndex) {
             // Reordering within the same column

@@ -9,6 +9,8 @@ import {
     Dispatch, StateUpdater, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState
 } from "preact/hooks";
 
+import type { HighlightedTokenInfo } from "@triliumnext/commons";
+
 import FNote from "../../../entities/fnote";
 import { t } from "../../../services/i18n";
 import type LoadResults from "../../../services/load_results";
@@ -34,10 +36,12 @@ import ActionButton from "../../react/ActionButton";
 import { IconPickerButton } from "../../react/IconPicker";
 import { useDragPan } from "../../react/drag_pan";
 import { FLIP_SETTLE_MS, useFlip } from "../../react/flip";
+import { CollectionFilterInput, useCollectionFilter } from "../collection_filter";
 import { ViewModeProps } from "../interface";
 import Api, { getPendingWrites, PendingColumnWrites, settleColumn } from "./api";
 import { useBoardDrag } from "./board_drag";
 import { movesColumn } from "./drag_geometry";
+import { BoardDropStateContext, DropStateStore } from "./drop_state";
 import BoardApi from "./api";
 import { DEFAULT_COLUMN_ICON, DEFAULT_GROUP_BY, getStatusDefinition, INBOX_COLUMN } from "./columns";
 import Column from "./column";
@@ -45,7 +49,9 @@ import { currentCardTemplate, DEFAULT_CARD_TEMPLATES } from "./card_templates";
 import ColumnLimitDialog from "./column_limit";
 import BoardProperties from "./properties";
 import { openBoardContextMenu, openCreateColumnMenu } from "./context_menu";
-import { applyCardMove, ColumnMap, getBoardData } from "./data";
+import {
+    applyCardMove, ColumnMap, filterColumnMap, getBoardData, unfilteredCardIndex
+} from "./data";
 import { useBoardKeyboard } from "./keyboard";
 
 /**
@@ -73,6 +79,8 @@ export interface BoardViewData {
      * name is shown after the ones it does; see {@link resolvePromotedAttributes}.
      */
     promotedAttributes?: PromotedAttributeSetting[];
+    /** The search query the board is narrowed to, absent while no filter is active. */
+    filterQuery?: string;
 }
 
 export interface BoardColumnData {
@@ -152,14 +160,18 @@ interface BoardActions {
     setDropTarget: (target: string | null) => void;
 }
 
-/** The half that changes repeatedly while a card or column is dragged, or a title is being edited. */
+/**
+ * The half that changes when a card or column is taken hold of and let go of, or a title is edited.
+ *
+ * Where the gap stands is not here: it changes on every step of a drag, and a context does that to
+ * every column at once. It is held in a {@link DropStateStore} instead, which each column asks
+ * about itself.
+ */
 interface BoardDragState {
     branchIdToEdit?: string;
     columnNameToEdit?: string;
     draggedCard: CardDrag | null;
     draggedColumn: ColumnDrag | null;
-    dropPosition: ColumnDrag | null;
-    dropTarget: string | null;
 }
 
 // Both defaults are the honest identity value rather than a stand-in, which is what lets consumers
@@ -188,10 +200,17 @@ export const BoardPromotedAttributesContext = createContext<string[] | undefined
 
 export const BoardDragStateContext = createContext<BoardDragState>({
     draggedCard: null,
-    draggedColumn: null,
-    dropPosition: null,
-    dropTarget: null
+    draggedColumn: null
 });
+
+/**
+ * The tokens the active filter matched by, which the cards highlight in their titles. A context
+ * rather than a prop, so a memoized card is not redrawn for it during a drag.
+ */
+export const BoardHighlightTokensContext = createContext<HighlightedTokenInfo[] | null>(null);
+
+/** The cards drawn although the filter does not match them, which say as much on their face. */
+export const BoardKeptCardsContext = createContext<Set<string>>(new Set());
 
 /**
  * What the board answers with when asked for contextual keyboard help. Every entry is a key the
@@ -255,14 +274,24 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const [ statusAttributeWithPrefix ] = useNoteLabelWithDefault(parentNote, "board:groupBy", DEFAULT_GROUP_BY);
     const [ includeArchived ] = useNoteLabelBoolean(parentNote, "includeArchived");
     const [ inboxEnabled ] = useNoteLabelBoolean(parentNote, "enableInboxColumn");
-    const [ byColumn, setByColumn ] = useState<ColumnMap>();
+    /** Every card the board holds, which an active filter narrows before the cards are drawn. */
+    const [ allByColumn, setAllByColumn ] = useState<ColumnMap>();
     const [ columns, setColumns ] = useState<string[]>();
     const [ isInRelationMode, setIsRelationMode ] = useState(false);
     const [ draggedCard, setDraggedCard ] = useState<CardDrag | null>(null);
     /** The column just added, which is revealed once the board has drawn it. */
     const [ createdColumn, setCreatedColumn ] = useState<string>();
-    const [ dropTarget, setDropTarget ] = useState<string | null>(null);
-    const [ dropPosition, setDropPosition ] = useState<{ column: string, index: number } | null>(null);
+    /**
+     * Where the gap stands, kept out of the board's state so that a step of a drag draws no column
+     * the gap is not near.
+     */
+    const dropState = useMemo(() => new DropStateStore(), []);
+    const setDropPosition = useCallback((position: ColumnDrag | null) => {
+        dropState.set({ ...dropState.get(), position });
+    }, [ dropState ]);
+    const setDropTarget = useCallback((target: string | null) => {
+        dropState.set({ ...dropState.get(), target });
+    }, [ dropState ]);
     const [ draggedColumn, setDraggedColumn ] = useState<ColumnDrag | null>(null);
     const [ columnDropPosition, setColumnDropPosition ] = useState<number | null>(null);
     const [ branchIdToEdit, setBranchIdToEdit ] = useState<string>();
@@ -328,17 +357,33 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     // them for a move that touched one. Another board takes a new one, since this instance is
     // reused across boards and the api holds that board's record of the writes in flight.
     const apiRef = useRef<{ board: string, api: Api }>();
+    const persistFilterQuery = useCallback(
+        (query: string) => apiRef.current?.api.setFilterQuery(query), []);
+    const filter = useCollectionFilter(parentNote, {
+        persistedQuery: viewConfig?.filterQuery,
+        onQueryChanged: persistFilterQuery,
+        collectionNoteIds: noteIds
+    });
+    // The cards as drawn. Derived rather than held, so what is shown cannot fall behind what the
+    // filter matches, and withheld until a query stored in `board.json` has said what it matches.
+    const byColumn = useMemo(
+        () => (allByColumn && !filter.isResolvingStoredQuery
+            ? filterColumnMap(allByColumn, filter.shownNoteIds)
+            : undefined),
+        [ allByColumn, filter.shownNoteIds, filter.isResolvingStoredQuery ]);
+
     if (!apiRef.current || apiRef.current.board !== boardIdentity) {
         apiRef.current = {
             board: boardIdentity,
             api: new Api(
                 byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
-                saveConfig, setBranchIdToEdit, pendingRenamesRef.current.writes, statusDefinition)
+                saveConfig, setBranchIdToEdit, pendingRenamesRef.current.writes, statusDefinition,
+                allByColumn, filter.keepNote)
         };
     } else {
         apiRef.current.api.update(
             byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
-            saveConfig, setBranchIdToEdit, statusDefinition);
+            saveConfig, setBranchIdToEdit, statusDefinition, allByColumn, filter.keepNote);
     }
     const api = apiRef.current.api;
     // Every member is one of useState's own setters, so this value is built once and never changes
@@ -429,10 +474,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         branchIdToEdit,
         columnNameToEdit,
         draggedCard,
-        draggedColumn,
-        dropPosition,
-        dropTarget
-    }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn, dropPosition, dropTarget ]);
+        draggedColumn
+    }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn ]);
 
     function refresh() {
         // A move under way has already been drawn where it will land. Held here rather than at each
@@ -461,7 +504,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         getBoardData(
             parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived,
             statusDefinition?.options ?? [], pendingRenamesRef.current.writes.renames, inboxEnabled)
-            .then(({ byColumn, columns, newPersistedData, isInRelationMode, settledRenames }) => {
+            .then(({
+                byColumn: allCards, columns, newPersistedData, isInRelationMode, settledRenames
+            }) => {
                 if (refreshId !== refreshSeqRef.current) {
                     return;
                 }
@@ -470,7 +515,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                     settleColumn(pendingRenamesRef.current.writes, settled);
                 }
 
-                setByColumn(byColumn);
+                setAllByColumn(allCards);
                 setIsRelationMode(isInRelationMode);
                 setColumns(columns);
 
@@ -526,8 +571,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             height: card.height
         }),
         onCardMove: (position, inside) => {
-            setDropTarget(position?.column ?? null);
-            setDropPosition(position);
+            // Written together: two writes would wake every column watching the gap twice over.
+            dropState.set({ position, target: position?.column ?? null });
             // Answers for what a `dragover` did, for a collapsed column the card is actually over:
             // one merely passed near keeps to itself, and one already opened stays open, since
             // closing it under a drag would move every column after it.
@@ -537,11 +582,15 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         },
         onCardEnd: (card, position) => {
             const branchId = byColumn?.get(card.fromColumn)?.[card.index]?.branch.branchId;
-            if (position && branchId && byColumn) {
-                // Drawn where it landed at once, and held there until both writes are in: each of
-                // them lands a redraw, and the first would show the card at the top of the column.
-                setByColumn(applyCardMove(
-                    byColumn, card.noteId, card.fromColumn, position.column, position.index));
+            if (position && branchId && byColumn && allByColumn) {
+                // Drawn at once, into `allByColumn` since that is what `byColumn` derives from, at
+                // the index `unfilteredCardIndex` translates rather than the visible drop index.
+                setAllByColumn(applyCardMove(
+                    allByColumn, card.noteId, card.fromColumn, position.column,
+                    unfilteredCardIndex(
+                        byColumn.get(position.column) ?? [],
+                        allByColumn.get(position.column) ?? [],
+                        position.index)));
                 movesInFlight.current++;
                 // Any refresh already on its way is about the board as it stood before the drop,
                 // and would put the card back where it came from as it resolves.
@@ -556,8 +605,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                     .finally(() => { movesInFlight.current--; });
             }
             setDraggedCard(null);
-            setDropTarget(null);
-            setDropPosition(null);
+            dropState.set({ position: null, target: null });
             // Asked for by name: the card is drawn again where it landed, and a card that crossed
             // columns is drawn as a new element, so the one that was focused is gone.
             focusCard(card.noteId);
@@ -710,9 +758,18 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
 
     return (
         <div className="board-view">
-            <CollectionProperties note={parentNote} />
+            <CollectionProperties
+                note={parentNote}
+                rightChildren={<CollectionFilterInput
+                    filter={filter}
+                    placeholder={t("board_view.filter-placeholder")}
+                />}
+            />
             <BoardActionsContext.Provider value={boardActions}>
                 <BoardPromotedAttributesContext.Provider value={shownAttributes}>
+                <BoardHighlightTokensContext.Provider value={filter.highlightedTokens}>
+                <BoardKeptCardsContext.Provider value={filter.keptNoteIds}>
+                <BoardDropStateContext.Provider value={dropState}>
                 <BoardDragStateContext.Provider value={boardDragState}>
                     {byColumn && columns && <div
                         ref={containerRef}
@@ -764,6 +821,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                                     onFocusColumn={focusColumn}
                                     onFocusCard={focusCard}
                                     columnItems={byColumn.get(column)}
+                                    totalCount={allByColumn?.get(column)?.length}
                                     isNew={column === createdColumn}
                                 />
                             </Fragment>
@@ -811,6 +869,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                         )}
                     </div>}
                 </BoardDragStateContext.Provider>
+                </BoardDropStateContext.Provider>
+                </BoardKeptCardsContext.Provider>
+                </BoardHighlightTokensContext.Provider>
                 </BoardPromotedAttributesContext.Provider>
             </BoardActionsContext.Provider>
         </div>

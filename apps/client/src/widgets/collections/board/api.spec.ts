@@ -15,7 +15,7 @@ import ws from "../../../services/ws";
 import { buildNote } from "../../../test/easy-froca";
 import { BoardViewData } from ".";
 import BoardApi, { getPendingWrites, PendingColumnWrites } from "./api";
-import { ColumnMap } from "./data";
+import { ColumnItem, ColumnMap } from "./data";
 import { BOARD_TEMPLATE_ID, DEFAULT_COLUMN_ICON, getStatusDefinition, INBOX_COLUMN } from "./columns";
 import { DEFAULT_CARD_TEMPLATES } from "./card_templates";
 
@@ -68,7 +68,9 @@ function createApi(
     columns: string[],
     parentNote?: FNote,
     statusAttribute = "status",
-    byColumn: ColumnMap = new Map()
+    byColumn: ColumnMap = new Map(),
+    allByColumn?: ColumnMap,
+    keepNote?: (noteId: string) => void
 ) {
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
@@ -84,10 +86,62 @@ function createApi(
         (newConfig) => saved.push(newConfig),
         (branchId) => editing.push(branchId),
         pending,
-        getStatusDefinition(board, statusAttribute)
+        getStatusDefinition(board, statusAttribute),
+        allByColumn,
+        keepNote
     );
     return { api, board, saved, editing, pendingRenames: pending.renames };
 }
+
+describe("BoardApi filtering", () => {
+    /** Cards named by their note id, which is all the operations under test read them for. */
+    function cards(columns: Record<string, string[]>): ColumnMap {
+        return new Map(Object.entries(columns).map(([ column, ids ]) => [
+            column,
+            ids.map((noteId) => ({ note: { noteId }, branch: { branchId: `b_${noteId}` } }))
+        ])) as unknown as ColumnMap;
+    }
+
+    it("stores a submitted filter query and clears it for an empty one", () => {
+        const { api, saved } = createApi({ filterQuery: undefined }, []);
+
+        api.setFilterQuery("#done");
+        expect(saved.at(-1)?.filterQuery).toBe("#done");
+
+        api.setFilterQuery("#done");
+        expect(saved).toHaveLength(1);
+
+        api.setFilterQuery("");
+        expect(saved).toHaveLength(2);
+        expect(saved.at(-1)?.filterQuery).toBeUndefined();
+    });
+
+    it("does not save for a cleared filter that was never set", () => {
+        const { api, saved } = createApi({}, []);
+
+        api.setFilterQuery("");
+        expect(saved).toHaveLength(0);
+    });
+
+    it("removes a column's value from the cards the filter is not showing too", async () => {
+        const { api } = createApi(
+            { columns: [ { value: "To Do" } ] },
+            [ "To Do" ],
+            undefined,
+            "status",
+            cards({ "To Do": [ "visible" ] }),
+            cards({ "To Do": [ "visible", "hidden" ] })
+        );
+
+        await api.removeColumn("To Do");
+
+        expect(executeBulkActions).toHaveBeenCalledWith(
+            [ "visible", "hidden" ],
+            [ { name: "deleteLabel", labelName: "status" } ],
+            { silent: true }
+        );
+    });
+});
 
 describe("BoardApi column mutations", () => {
     /**
@@ -502,10 +556,116 @@ describe("BoardApi card operations", () => {
         // The target column is empty, so there is nothing to place it against.
         await api.moveWithinBoard(first.note.noteId, first.branch.branchId, 0, 1, "Done", "To Do");
         expect(branches.moveBeforeBranch).not.toHaveBeenCalled();
+        expect(branches.moveAfterBranch).not.toHaveBeenCalled();
 
         await api.moveWithinBoard(first.note.noteId, first.branch.branchId, 0, 1, "To Do", "Done");
         expect(branches.moveBeforeBranch)
             .toHaveBeenCalledWith([ first.branch.branchId ], items[1].branch.branchId);
+    });
+
+    /** A board whose "Done" column holds three cards, with a fourth waiting in "To Do". */
+    function createBoardWithSpareCard(shownInDone?: (done: ColumnItem[]) => ColumnItem[]) {
+        const board = buildNote({
+            title: "Board",
+            children: [
+                { title: "First", "#status": "Done" },
+                { title: "Second", "#status": "Done" },
+                { title: "Third", "#status": "Done" },
+                { title: "Spare", "#status": "To Do" }
+            ]
+        });
+
+        const items = board.getChildBranches().flatMap(branch => {
+            const note = froca.getNoteFromCache(branch.noteId);
+            return note ? [ { branch, note } ] : [];
+        });
+        const done = items.slice(0, 3);
+        const spare = items[3];
+        const allByColumn: ColumnMap = new Map([ [ "To Do", [ spare ] ], [ "Done", done ] ]);
+        const byColumn: ColumnMap = shownInDone
+            ? new Map([ [ "To Do", [ spare ] ], [ "Done", shownInDone(done) ] ])
+            : allByColumn;
+
+        const created = createApi(
+            {}, [ "To Do", "Done" ], board, "status", byColumn, allByColumn);
+        return { ...created, done, spare };
+    }
+
+    /**
+     * Crossing columns writes a placement too. Left with the tree position it came with, the card
+     * would rank among the target's cards by wherever it happened to sit before the drop.
+     */
+    it("files a card dropped past the last card of another column after it", async () => {
+        const { api, done, spare } = createBoardWithSpareCard();
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 3, "To Do", "Done");
+
+        expect(branches.moveBeforeBranch).not.toHaveBeenCalled();
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    it("files a card dropped into a column a filter empties after the cards it hides", async () => {
+        const { api, done, spare } = createBoardWithSpareCard(() => []);
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 0, "To Do", "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    it("files a card dropped past the last card shown after that one, not the hidden", async () => {
+        const { api, done, spare } = createBoardWithSpareCard((all) => [ all[0] ]);
+
+        await api.moveWithinBoard(spare.note.noteId, spare.branch.branchId, 0, 1, "To Do", "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[0].branch.branchId);
+    });
+
+    it("sends a card after the last one drawn in a column a filter narrows", async () => {
+        const { api, done, spare } = createBoardWithSpareCard((all) => [ all[0] ]);
+
+        await api.moveToColumnEnd(spare.note.noteId, spare.branch.branchId, "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[0].branch.branchId);
+    });
+
+    it("sends a card past the cards a filter hides when it draws none of them", async () => {
+        const { api, done, spare } = createBoardWithSpareCard(() => []);
+
+        await api.moveToColumnEnd(spare.note.noteId, spare.branch.branchId, "Done");
+
+        expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    /**
+     * A card is rarely made to match the query in force, so one made here is drawn anyway rather
+     * than the board answering an addition by showing nothing at all.
+     */
+    it("reports every card it gains, so a filter does not swallow it", async () => {
+        const kept: string[] = [];
+        const { api } = createApi(
+            {}, [ "Done" ], undefined, "status", new Map(), undefined,
+            (noteId) => kept.push(noteId));
+        vi.mocked(note_create.createNote).mockResolvedValue(
+            { note: { noteId: "made" } } as never);
+
+        await api.createNewItem("Done", "Made now");
+
+        expect(kept).toEqual([ "made" ]);
+    });
+
+    it("makes a card at the head of a column above the first one drawn", async () => {
+        const { api, done } = createBoardWithSpareCard((all) => [ all[1] ]);
+
+        await api.createNewItem("Done", "Newest", "top");
+
+        expect(note_create.createNote).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ target: "before", targetBranchId: done[1].branch.branchId }));
     });
 
     it("reorders within a column, and places past the last card after it", async () => {

@@ -370,6 +370,13 @@ body.mobile .board-view-container .board-add-column {
      above it takes that place and moves the card down by it. */
   margin-block: 0 0.65em;
   transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.15s ease;
+
+  .board-note-outside-filter {
+    color: var(--muted-text-color);
+    font-size: 1.1em;
+    line-height: 1;
+    cursor: default;
+  }
 }
 
 .board-view-container .board-column.board-column-archived {
@@ -391,6 +398,14 @@ body.mobile .board-view-container .board-add-column {
 .board-view-container .board-note > .title {
   display: flex;
   align-items: flex-start;
+
+  /* The spans mark.js wraps a filter's matched tokens in. Matches the search result cards. */
+  .ck-find-result {
+    background: var(--note-list-view-search-result-highlight-background);
+    color: var(--note-list-view-search-result-highlight-color);
+    font-weight: 600;
+    text-decoration: underline;
+  }
 }
 
 .board-view-container .board-note > .title > .icon {
