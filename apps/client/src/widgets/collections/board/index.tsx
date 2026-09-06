@@ -573,10 +573,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         onCardEnd: (card, position) => {
             const branchId = byColumn?.get(card.fromColumn)?.[card.index]?.branch.branchId;
             if (position && branchId && byColumn && allByColumn) {
-                // Drawn where it landed at once, and held there until both writes are in: each of
-                // them lands a redraw, and the first would show the card at the top of the column.
-                // Written into the full column, which is what the cards are drawn from, at the
-                // place the move is written against rather than the one it was dropped at.
+                // Drawn at once, into `allByColumn` since that is what `byColumn` derives from, at
+                // the index `unfilteredCardIndex` translates rather than the visible drop index.
                 setAllByColumn(applyCardMove(
                     allByColumn, card.noteId, card.fromColumn, position.column,
                     unfilteredCardIndex(

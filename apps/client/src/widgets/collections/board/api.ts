@@ -1140,12 +1140,7 @@ export default class BoardApi {
         return attributes.removeOwnedLabelByName(note, this.statusAttribute);
     }
 
-    /**
-     * Moves a card to the end of another column, where a new one would go.
-     *
-     * A card sent across by the keyboard is aimed at no card in particular, unlike a drop, so it
-     * goes where the reader would look for it.
-     */
+    /** Moves a card to the end of another column, where a card sent by the keyboard belongs. */
     async moveToColumnEnd(noteId: string, branchId: string, targetColumn: string) {
         // What is already at the end, as far as this instance can know: nothing waits for the board
         // to redraw between two keystrokes, so the column map still shows the target as it was

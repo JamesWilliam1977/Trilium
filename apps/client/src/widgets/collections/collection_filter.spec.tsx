@@ -165,7 +165,7 @@ describe("useCollectionFilter", () => {
         searchInSubtree.mockReturnValueOnce(stored);
         await mount({ persistedQuery: "#done" });
 
-        // Nothing may be drawn yet: the matches the board would narrow to are still unknown.
+        // Nothing must be drawn yet: the matches the board would narrow to are still unknown.
         expect(currentFilter?.isResolvingStoredQuery).toBe(true);
 
         await act(async () => {
