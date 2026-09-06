@@ -1,7 +1,7 @@
 import type { HighlightedTokenInfo } from "@triliumnext/commons";
 import DOMPurify from "dompurify";
 import type { CSSProperties, HTMLProps, RefObject } from "preact/compat";
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 
 import { useImperativeSearchHighlighlighting } from "./hooks";
 
@@ -60,9 +60,10 @@ export function HighlightedText({ className, text, highlightedTokens }: {
     const ref = useRef<HTMLSpanElement>(null);
     const highlight = useImperativeSearchHighlighlighting(highlightedTokens);
 
-    // `highlight` is a fresh closure each render, so the effect keys on the token list instead.
+    // Before the paint, so the span is not drawn empty for a frame first. `highlight` is a fresh
+    // closure each render, so the effect keys on the token list instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!ref.current) return;
         ref.current.textContent = text;
         highlight(ref.current);
