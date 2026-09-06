@@ -41,12 +41,8 @@ export function useSlashCommands(parentComponent: TypeWidgetProps["parentCompone
     useEffect(() => {
         if (!editorView) return;
 
-        // Registered as completion *sources* rather than as a whole
-        // `autocompletion()` extension: CodeMirror allows a single `override`
-        // config per editor, and the editor already aggregates every source into
-        // one extension. Adding a second one here collided with that aggregate
-        // once any other source was registered (e.g. by `setMimeType`), throwing
-        // "Config merge conflict for field override".
+        // CodeMirror allows one `override` config per editor, so sources go through
+        // `setCompletionSource` instead of each adding its own `autocompletion()`.
         editorView.setCompletionSource("slashCommands", (ctx) => {
             // `:` and `-` are allowed so `/todo:<state>` (e.g. `/todo:in-progress`) matches as one token.
             const match = ctx.matchBefore(SLASH_COMMAND_REGEX);
