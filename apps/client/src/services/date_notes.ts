@@ -11,6 +11,13 @@ async function getInboxNote() {
     return await froca.getNote(note.noteId);
 }
 
+/** Resolves the inbox note to a note path, for callers that create notes there. */
+async function getInboxNotePath() {
+    const inboxNote = await getInboxNote();
+
+    return inboxNote?.getBestNotePathString();
+}
+
 async function getTodayNote() {
     return await getDayNote(dayjs().format("YYYY-MM-DD"));
 }
@@ -135,6 +142,7 @@ async function getRecentLlmChats(limit: number = 10): Promise<RecentLlmChat[]> {
 
 export default {
     getInboxNote,
+    getInboxNotePath,
     getTodayNote,
     getDayNote,
     getWeekFirstDayNote,

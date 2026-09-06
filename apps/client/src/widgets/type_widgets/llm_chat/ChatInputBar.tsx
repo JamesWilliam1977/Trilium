@@ -39,7 +39,7 @@ const mentionFeeds: MentionFeed[] = [
 
             const iconElement = document.createElement("span");
             let iconClass = item.icon ?? "bx bx-note";
-            if (item.action === "create-note") {
+            if (item.action === "create-note" || item.action === "create-child-note") {
                 iconClass = "bx bx-plus";
             }
             iconElement.className = iconClass;

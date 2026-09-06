@@ -3,12 +3,13 @@ import $ from "jquery";
 
 // --- Mocks (hoisted above imports) ---
 
-const { triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote, getAllCommands, searchCommands } = vi.hoisted(() => ({
+const { triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote, getInboxNotePath, getAllCommands, searchCommands } = vi.hoisted(() => ({
     triggerCommand: vi.fn(),
     getActiveContextNoteId: vi.fn<() => string | null>(() => "activeNote"),
     getActiveContext: vi.fn<() => any>(() => ({ hoistedNoteId: "hoisted" })),
     chooseNoteType: vi.fn(),
     createNote: vi.fn(),
+    getInboxNotePath: vi.fn<() => Promise<string | undefined>>(async () => "root/inbox"),
     getAllCommands: vi.fn(() => [] as any[]),
     searchCommands: vi.fn(() => [] as any[])
 }));
@@ -25,6 +26,10 @@ vi.mock("../components/app_context.js", () => ({
 
 vi.mock("./note_create.js", () => ({
     default: { chooseNoteType, createNote }
+}));
+
+vi.mock("./date_notes.js", () => ({
+    default: { getInboxNotePath }
 }));
 
 vi.mock("./command_registry.js", () => ({
@@ -105,7 +110,7 @@ describe("note_autocomplete", () => {
             ]) as typeof server.get;
 
             const result = (await noteAutocomplete.autocompleteSourceForCKEditor("Foo")) as any[];
-            // autocompleteSourceForCKEditor forces allowCreatingNotes -> a create-note row is prepended.
+            // autocompleteSourceForCKEditor forces allowCreatingNotes -> the creation rows are prepended.
             const mapped = result.find((r) => r.notePath === "root/abc");
             expect(mapped).toEqual({
                 action: "search-notes",
@@ -122,7 +127,7 @@ describe("note_autocomplete", () => {
         it("falls back to empty name when notePathTitle is missing", async () => {
             server.get = vi.fn(async () => []) as typeof server.get;
             const result = (await noteAutocomplete.autocompleteSourceForCKEditor("X")) as any[];
-            // only the synthetic create-note row remains; it has no notePathTitle.
+            // only the synthetic creation rows remain; they have no notePathTitle.
             const createRow = result.find((r) => r.action === "create-note");
             expect(createRow).toBeDefined();
             expect(createRow!.name).toBe("");
@@ -275,21 +280,24 @@ describe("autocompleteSource (via dataset)", () => {
         expect(server.get).not.toHaveBeenCalled();
     });
 
-    it("prepends a create-note suggestion when allowCreatingNotes and term is non-empty", async () => {
+    it("prepends create-note and create-child-note suggestions when allowCreatingNotes and term is non-empty", async () => {
         server.get = vi.fn(async () => [{ noteTitle: "Existing", notePath: "root/y" }]) as typeof server.get;
         const { dataset } = initAndGetSource({ allowCreatingNotes: true });
         const rows = await runSource(dataset, "New");
         expect(rows[0].action).toBe("create-note");
-        expect(rows[0].parentNoteId).toBe("activeNote");
-        expect(rows[1].noteTitle).toBe("Existing");
+        // the inbox is resolved on selection, so the row carries no parent
+        expect(rows[0].parentNoteId).toBeUndefined();
+        expect(rows[1].action).toBe("create-child-note");
+        expect(rows[1].parentNoteId).toBe("activeNote");
+        expect(rows[2].noteTitle).toBe("Existing");
     });
 
-    it("uses root as parent when there is no active note", async () => {
+    it("uses root as the child-note parent when there is no active note", async () => {
         getActiveContextNoteId.mockReturnValue(null);
         server.get = vi.fn(async () => []) as typeof server.get;
         const { dataset } = initAndGetSource({ allowCreatingNotes: true });
         const rows = await runSource(dataset, "New");
-        expect(rows[0].parentNoteId).toBe("root");
+        expect(rows[1].parentNoteId).toBe("root");
     });
 
     it("appends a search-notes suggestion when allowJumpToSearchNotes", async () => {
@@ -311,8 +319,9 @@ describe("autocompleteSource (via dataset)", () => {
         server.get = vi.fn(async () => [{ noteTitle: "A", notePath: "root/a" }]) as typeof server.get;
         const { dataset } = initAndGetSource({ allowCreatingNotes: true, allowJumpToSearchNotes: true, allowExternalLinks: true });
         const rows = await runSource(dataset, "   ");
-        // length === 0 so neither create-note nor search-notes nor external-link added
+        // length === 0 so neither creation row nor search-notes nor external-link added
         expect(rows.every((r) => r.action !== "create-note")).toBe(true);
+        expect(rows.every((r) => r.action !== "create-child-note")).toBe(true);
         expect(rows.every((r) => r.action !== "search-notes")).toBe(true);
     });
 
@@ -356,6 +365,8 @@ describe("autocompleteSource (via dataset)", () => {
         expect(dataset.templates.suggestion({ action: "search-notes", highlightedNotePathTitle: "S" }))
             .toContain("bx bx-search");
         expect(dataset.templates.suggestion({ action: "create-note", highlightedNotePathTitle: "C" }))
+            .toContain("bx bx-plus");
+        expect(dataset.templates.suggestion({ action: "create-child-note", highlightedNotePathTitle: "C" }))
             .toContain("bx bx-plus");
         expect(dataset.templates.suggestion({ action: "external-link", highlightedNotePathTitle: "E" }))
             .toContain("bx bx-link-external");
@@ -766,16 +777,33 @@ describe("autocomplete:selected handler", () => {
         expect(triggerCommand).toHaveBeenCalledWith("searchNotes", { searchString: "query" });
     });
 
-    it("creates a note then selects it", async () => {
-        const note = buildNote({ title: "Created" });
+    it("creates a note in the inbox then selects it", async () => {
         chooseNoteType.mockResolvedValue({ success: true, noteType: "text", templateNoteId: undefined, notePath: undefined });
         createNote.mockResolvedValue({ note: { getBestNotePathString: () => "root/created" } });
         const { $el, handlers } = initWithSelected();
-        await fireSelected($el, { action: "create-note", noteTitle: "Created", parentNoteId: "parent" });
+        await fireSelected($el, { action: "create-note", noteTitle: "Created" });
         expect(chooseNoteType).toHaveBeenCalled();
-        expect(createNote).toHaveBeenCalledWith("parent", expect.objectContaining({ title: "Created", type: "text" }));
+        expect(createNote).toHaveBeenCalledWith("root/inbox", expect.objectContaining({ title: "Created", type: "text" }));
         expect(handlers["autocomplete:noteselected"]).toBeDefined();
         expect(handlers["autocomplete:noteselected"].notePath).toBe("root/created");
+    });
+
+    it("creates a child note under the suggested parent", async () => {
+        chooseNoteType.mockResolvedValue({ success: true, noteType: "text", templateNoteId: undefined, notePath: undefined });
+        createNote.mockResolvedValue({ note: { getBestNotePathString: () => "root/created" } });
+        const { $el } = initWithSelected();
+        await fireSelected($el, { action: "create-child-note", noteTitle: "Created", parentNoteId: "parent" });
+        expect(getInboxNotePath).not.toHaveBeenCalled();
+        expect(createNote).toHaveBeenCalledWith("parent", expect.objectContaining({ title: "Created" }));
+    });
+
+    it("aborts when the inbox cannot be resolved", async () => {
+        chooseNoteType.mockResolvedValue({ success: true, noteType: "text" });
+        getInboxNotePath.mockResolvedValueOnce(undefined);
+        const { $el, handlers } = initWithSelected();
+        await fireSelected($el, { action: "create-note", noteTitle: "X" });
+        expect(createNote).not.toHaveBeenCalled();
+        expect(handlers["autocomplete:noteselected"]).toBeUndefined();
     });
 
     it("aborts the create-note flow when the type chooser is cancelled", async () => {

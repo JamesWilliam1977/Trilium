@@ -2,6 +2,7 @@ import type { MentionFeedObjectItem } from "@triliumnext/ckeditor5";
 
 import appContext from "../components/app_context.js";
 import commandRegistry from "./command_registry.js";
+import dateNoteService from "./date_notes.js";
 import froca from "./froca.js";
 import { t } from "./i18n.js";
 import noteCreateService from "./note_create.js";
@@ -32,7 +33,7 @@ export interface Suggestion {
     notePathTitle?: string;
     notePath?: string;
     highlightedNotePathTitle?: string;
-    action?: string | "create-note" | "search-notes" | "external-link" | "command";
+    action?: string | "create-note" | "create-child-note" | "search-notes" | "external-link" | "command";
     parentNoteId?: string;
     icon?: string;
     commandId?: string;
@@ -134,8 +135,13 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
             {
                 action: "create-note",
                 noteTitle: term,
-                parentNoteId: activeNoteId || "root",
                 highlightedNotePathTitle: t("note_autocomplete.create-note", { term })
+            } as Suggestion,
+            {
+                action: "create-child-note",
+                noteTitle: term,
+                parentNoteId: activeNoteId || "root",
+                highlightedNotePathTitle: t("note_autocomplete.create-child-note", { term })
             } as Suggestion
         ].concat(results);
     }
@@ -356,7 +362,7 @@ function initNoteAutocomplete($el: JQuery<HTMLElement>, options?: Options) {
                         let iconClass = suggestion.icon ?? "bx bx-note";
                         if (suggestion.action === "search-notes") {
                             iconClass = "bx bx-search";
-                        } else if (suggestion.action === "create-note") {
+                        } else if (suggestion.action === "create-note" || suggestion.action === "create-child-note") {
                             iconClass = "bx bx-plus";
                         } else if (suggestion.action === "external-link") {
                             iconClass = "bx bx-link-external";
@@ -405,12 +411,20 @@ function initNoteAutocomplete($el: JQuery<HTMLElement>, options?: Options) {
             return;
         }
 
-        if (suggestion.action === "create-note") {
+        if (suggestion.action === "create-note" || suggestion.action === "create-child-note") {
             const { success, noteType, templateNoteId, notePath, cloneToNoteIds } = await noteCreateService.chooseNoteType();
             if (!success) {
                 return;
             }
-            const { note } = await noteCreateService.createNote( notePath || suggestion.parentNoteId, {
+
+            const parentNotePath = notePath ?? (suggestion.action === "create-note"
+                ? await dateNoteService.getInboxNotePath()
+                : suggestion.parentNoteId);
+            if (!parentNotePath) {
+                return;
+            }
+
+            const { note } = await noteCreateService.createNote(parentNotePath, {
                 title: suggestion.noteTitle,
                 activate: false,
                 type: noteType,
