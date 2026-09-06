@@ -29,7 +29,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@v6
+    - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
     - name: Set up Node.js
       uses: actions/setup-node@v7
       with:
@@ -43,7 +43,7 @@ runs:
         java-version: 21
 
     - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v6
+      uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
     - name: Install dependencies
       shell: bash
