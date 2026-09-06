@@ -322,6 +322,16 @@ describe("autocompleteSource (via dataset)", () => {
         expect(translate).toHaveBeenCalledWith("note_autocomplete.create-note-into", { term: "New", parentTitle: title });
     });
 
+    it("says top level for a database with neither an inbox nor a journal", async () => {
+        getInboxTarget.mockResolvedValueOnce({ kind: "root", noteId: "root", title: "root" });
+        server.get = vi.fn(async () => []) as typeof server.get;
+        const { dataset } = initAndGetSource({ allowCreatingNotes: true });
+        const rows = await runSource(dataset, "New");
+        // The root note's title would be meaningless in the label, so it is not used.
+        expect(rows[0].highlightedNotePathTitle).toBe("note_autocomplete.create-note-into-root");
+        expect(translate).toHaveBeenCalledWith("note_autocomplete.create-note-into-root", { term: "New" });
+    });
+
     it("names the day note, which has no title of its own until it is created", async () => {
         getInboxTarget.mockResolvedValueOnce({ kind: "dayNote" });
         server.get = vi.fn(async () => []) as typeof server.get;

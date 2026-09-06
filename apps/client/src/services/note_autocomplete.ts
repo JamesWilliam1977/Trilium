@@ -41,12 +41,21 @@ async function getInboxTarget() {
 
 /** Labels the creation entry with the note the capture would land in. */
 function buildCreateNoteTitle(term: string, target: InboxTargetResponse | null) {
-    if (!target || (target.kind !== "dayNote" && !target.title)) {
+    if (!target) {
         return t("note_autocomplete.create-note", { term });
     }
 
     if (target.kind === "dayNote") {
         return t("note_autocomplete.create-note-into-day-note", { term });
+    }
+
+    // The root note's own title names nothing the user recognises in the tree.
+    if (target.kind === "root") {
+        return t("note_autocomplete.create-note-into-root", { term });
+    }
+
+    if (!target.title) {
+        return t("note_autocomplete.create-note", { term });
     }
 
     return t("note_autocomplete.create-note-into", { term, parentTitle: target.title });

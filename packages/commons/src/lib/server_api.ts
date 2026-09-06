@@ -797,7 +797,7 @@ export type SaveSearchNoteResponse = CloneResponse;
  * Which rule decided where a quickly captured note goes. `dayNote` is the only one that
  * names no note, because the day note is created when the capture happens.
  */
-export type InboxTargetKind = "inbox" | "workspaceInbox" | "workspaceRoot" | "dayNote";
+export type InboxTargetKind = "inbox" | "workspaceInbox" | "workspaceRoot" | "dayNote" | "root";
 
 /** Where `POST /api/notes/:id/children` would put a note captured into the inbox. */
 export interface InboxTargetResponse {

@@ -48,7 +48,13 @@ function resolveInboxTarget(): { kind: InboxTargetKind; note?: BNote } {
         return { kind: "inbox", note: inbox };
     }
 
-    return { kind: "dayNote" };
+    // Capturing a note is not a request for a journal, so a database without one keeps the note
+    // at the top level rather than having a calendar built around it (#11034).
+    if (dateNoteService.hasCalendarRoot()) {
+        return { kind: "dayNote" };
+    }
+
+    return { kind: "root", note: workspaceNote };
 }
 
 function getInboxTarget(): InboxTargetResponse {

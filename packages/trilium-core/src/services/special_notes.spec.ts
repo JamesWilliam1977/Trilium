@@ -158,7 +158,9 @@ describe("special_notes (core, real DB)", () => {
         });
 
         it("falls back to the day note when no #inbox label exists at the root", () => {
-            vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(null);
+            // A journal has to exist, or the capture stays at the top level instead.
+            vi.spyOn(attributeService, "getNoteWithLabel").mockImplementation((name: string) =>
+                name === "calendarRoot" ? becca.getNoteOrThrow("root").getChildNotes()[0] : null);
 
             // getDayNote may create the day note, so it needs a CLS context.
             const result = getContext().init(() => specialNotes.getInboxNote("2026-05-29"));
@@ -202,7 +204,8 @@ describe("special_notes (core, real DB)", () => {
         });
 
         it("reports the day note without creating it", () => {
-            vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(null);
+            vi.spyOn(attributeService, "getNoteWithLabel").mockImplementation((name: string) =>
+                name === "calendarRoot" ? becca.getNoteOrThrow("root").getChildNotes()[0] : null);
             const noteCountBefore = Object.keys(becca.notes).length;
 
             // No CLS context: reaching getDayNote() would need one, so this also proves it is
@@ -211,16 +214,15 @@ describe("special_notes (core, real DB)", () => {
             expect(Object.keys(becca.notes).length).toBe(noteCountBefore);
         });
 
-        it("still reports the day note when the journal has been deleted, because the capture recreates it", () => {
+        it("keeps a capture at the top level when the journal has been deleted, rather than rebuilding it", () => {
             // Nulls both labels this path consults, #inbox and #calendarRoot.
             vi.spyOn(attributeService, "getNoteWithLabel").mockReturnValue(null);
+            const noteCountBefore = Object.keys(becca.notes).length;
 
-            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "dayNote" });
-
-            // Not root: getInboxNote() rebuilds the calendar rather than falling back to it.
-            const created = getContext().init(() => specialNotes.getInboxNote("2026-05-29"));
-            expect(created.noteId).not.toBe("root");
-            expect(created.getParentNotes().some((p) => p.noteId === "root")).toBe(false);
+            expect(specialNotes.getInboxTarget()).toMatchObject({ kind: "root", noteId: "root" });
+            expect(specialNotes.getInboxNote("2026-05-29").noteId).toBe("root");
+            // No calendar was built on the way.
+            expect(Object.keys(becca.notes).length).toBe(noteCountBefore);
         });
 
         it("distinguishes the workspace inbox, a plain inbox and the workspace root", () => {
