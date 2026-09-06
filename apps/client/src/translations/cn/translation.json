@@ -1143,7 +1143,13 @@
     "remove_value": "移除此值",
     "select_values_placeholder": "选择一个选项或创建一个",
     "values_placeholder": "输入一个值并按回车",
-    "add_value": "添加此值"
+    "add_value": "添加此值",
+    "create_attribute": "创建新属性",
+    "edit_attribute": "编辑此属性",
+    "delete_attribute": "删除此属性",
+    "delete_confirmation": "从该集合中的每一张笔记中删除 <strong>{{name}}</strong> 及其值？此操作无法撤销。",
+    "shown_on_items": "在项目上显示",
+    "hidden_from_items": "在项目上隐藏"
   },
   "script_executor": {
     "query": "查询",
@@ -1984,7 +1990,9 @@
     "ai-chat": "AI对话",
     "spreadsheet": "电子表格",
     "llm-chat": "AI对话",
-    "markdown": "Markdown"
+    "markdown": "Markdown",
+    "note-types": "笔记类型",
+    "built-in-templates": "内置模板"
   },
   "protect_note": {
     "toggle-on": "保护笔记",
@@ -2085,7 +2093,10 @@
   "search_result": {
     "no_notes_found": "没有找到符合搜索条件的笔记。",
     "search_not_executed": "尚未执行搜索。",
-    "search_now": "立即搜索"
+    "search_now": "立即搜索",
+    "result_count_other": "{{count}} 个结果",
+    "page_size": "每页",
+    "snippet_unavailable": "无法预览。"
   },
   "sql_result": {
     "no_rows": "此查询没有返回任何数据",
@@ -2530,7 +2541,7 @@
     "limit-capacity": "超出列容量时发出警告",
     "limit-count": "列中笔记的最大数量",
     "collapse-column": "折叠列",
-    "edit-title": "编辑标题",
+    "edit-title": "编辑标题与图标",
     "move-to-top": "移到顶部",
     "create-new-note": "新建笔记",
     "create-new-column": "新建列",
@@ -2540,7 +2551,24 @@
     "create-column-at-start": "在开头新建列",
     "create-column-at-end": "在末尾新建列",
     "keep-column-collapsed": "保持列折叠",
-    "collapse-hint": "双击以折叠"
+    "collapse-hint": "双击以折叠",
+    "more-columns": "更多状态…",
+    "collapse-all-columns": "折叠所有列",
+    "expand-all-columns": "展开所有列",
+    "show-inbox-column": "显示收件箱列",
+    "show-archived-notes": "显示已归档卡片和列",
+    "more-templates": "更多模板…",
+    "card-template": "选择卡片模板",
+    "change-note-icon": "更改图标",
+    "properties": "看板属性",
+    "card-templates-hint": "选择创建新看板卡片时要使用的笔记类型和笔记模板。",
+    "promoted-attributes": "卡片属性",
+    "promoted-attributes-hint": "选择卡片要显示的属性，并可拖拽调整其显示顺序。",
+    "new-template-name": "新卡片模板",
+    "general": "常规",
+    "show-archived": "显示已归档卡片和列",
+    "properties-title": "看板属性",
+    "card-templates": "卡片模板"
   },
   "command_palette": {
     "tree-action-name": "树形：{{name}}",
@@ -4084,5 +4112,21 @@
     "in_picker": "在字体选择器中",
     "offer_in_picker": "在外观设置中提供此字体",
     "remove_from_picker": "不在外观设置中提供此字体"
+  },
+  "template_selection": {
+    "add-existing": "添加现有模板",
+    "add-title": "添加模板",
+    "new-name": "新模板",
+    "create": "创建新模板",
+    "menu": "模板菜单",
+    "remove": "从列表中移除"
+  },
+  "item_picker": {
+    "title": "选择一个项目",
+    "search": "搜索…",
+    "nothing-found": "没有匹配你输入的内容。"
+  },
+  "sortable_card": {
+    "reorder": "拖拽以重新排序"
   }
 }
