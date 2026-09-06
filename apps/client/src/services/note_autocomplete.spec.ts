@@ -280,15 +280,15 @@ describe("autocompleteSource (via dataset)", () => {
         expect(server.get).not.toHaveBeenCalled();
     });
 
-    it("keeps the create-note row above the results and the create-child-note row below them", async () => {
+    it("keeps both creation rows above the results, so neither is scrolled or sliced away", async () => {
         server.get = vi.fn(async () => [{ noteTitle: "Existing", notePath: "root/y" }]) as typeof server.get;
         const { dataset } = initAndGetSource({ allowCreatingNotes: true, allowJumpToSearchNotes: true });
         const rows = await runSource(dataset, "New");
-        expect(rows.map((r) => r.action)).toEqual([ "create-note", undefined, "create-child-note", "search-notes" ]);
+        expect(rows.map((r) => r.action)).toEqual([ "create-note", "create-child-note", undefined, "search-notes" ]);
         // the inbox is resolved on selection, so the row carries no parent
         expect(rows[0].parentNoteId).toBeUndefined();
-        expect(rows[1].noteTitle).toBe("Existing");
-        expect(rows[2].parentNoteId).toBe("activeNote");
+        expect(rows[1].parentNoteId).toBe("activeNote");
+        expect(rows[2].noteTitle).toBe("Existing");
     });
 
     it("uses root as the child-note parent when there is no active note", async () => {

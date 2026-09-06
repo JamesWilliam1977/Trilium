@@ -130,23 +130,22 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
 
     options.fastSearch = true;
 
-    // The inbox row holds the single slot above the results, so their positions are the same as
-    // before it existed; the child-note row sits with the other secondary actions at the bottom.
+    // Both rows stay above the results: the CKEditor mention feed renders only the first
+    // `mention.dropdownLimit` items, and the jQuery dropdown scrolls past as many as 200.
     if (length >= 1 && options.allowCreatingNotes) {
-        results = ([
+        results = [
             {
                 action: "create-note",
                 noteTitle: term,
                 highlightedNotePathTitle: t("note_autocomplete.create-note", { term })
-            }
-        ] as Suggestion[]).concat(results, [
+            } as Suggestion,
             {
                 action: "create-child-note",
                 noteTitle: term,
                 parentNoteId: activeNoteId || "root",
                 highlightedNotePathTitle: t("note_autocomplete.create-child-note", { term })
             } as Suggestion
-        ]);
+        ].concat(results);
     }
 
     if (length >= 1 && options.allowJumpToSearchNotes) {
