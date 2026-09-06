@@ -39,8 +39,8 @@ describe("Component handlers", () => {
         const component = new Component();
         const late = vi.fn();
         const removed = vi.fn();
-        // Subscribing and unsubscribing from inside a handler is what a hook does when an event
-        // makes it re-render, so neither may disturb the round it arrived in.
+        // A hook subscribes and unsubscribes from inside a handler when an event makes it
+        // re-render, and neither can disturb the round the event arrived in.
         const first = vi.fn(() => {
             register(component, late);
             component.removeHandler("entitiesReloaded" as never, removed);

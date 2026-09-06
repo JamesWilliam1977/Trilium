@@ -21,9 +21,9 @@ export class TypedComponent<ChildT extends TypedComponent<ChildT>> {
     initialized: Promise<void> | null;
     parent?: TypedComponent<any>;
     _position!: number;
-    // A set rather than an array: every froca hook re-subscribes whenever its handler changes
-    // identity, so a view with thousands of components registers and removes against a list
-    // thousands of entries long. Scanning it each time made that quadratic.
+    // Held in a set so that registering and removing cost the same whatever the list already
+    // holds: every froca hook re-subscribes whenever its handler changes identity, and a view of
+    // thousands of components keeps thousands of handlers for one event.
     private listeners: Record<string, Set<EventHandler>> | null = {};
 
     constructor() {

@@ -41,6 +41,7 @@ import { ViewModeProps } from "../interface";
 import Api, { getPendingWrites, PendingColumnWrites, settleColumn } from "./api";
 import { useBoardDrag } from "./board_drag";
 import { movesColumn } from "./drag_geometry";
+import { BoardDropStateContext, DropStateStore } from "./drop_state";
 import BoardApi from "./api";
 import { DEFAULT_COLUMN_ICON, DEFAULT_GROUP_BY, getStatusDefinition, INBOX_COLUMN } from "./columns";
 import Column from "./column";
@@ -159,14 +160,18 @@ interface BoardActions {
     setDropTarget: (target: string | null) => void;
 }
 
-/** The half that changes repeatedly while a card or column is dragged, or a title is being edited. */
+/**
+ * The half that changes when a card or column is taken hold of and let go of, or a title is edited.
+ *
+ * Where the gap stands is not here: it changes on every step of a drag, and a context does that to
+ * every column at once. It is held in a {@link DropStateStore} instead, which each column asks
+ * about itself.
+ */
 interface BoardDragState {
     branchIdToEdit?: string;
     columnNameToEdit?: string;
     draggedCard: CardDrag | null;
     draggedColumn: ColumnDrag | null;
-    dropPosition: ColumnDrag | null;
-    dropTarget: string | null;
 }
 
 // Both defaults are the honest identity value rather than a stand-in, which is what lets consumers
@@ -195,9 +200,7 @@ export const BoardPromotedAttributesContext = createContext<string[] | undefined
 
 export const BoardDragStateContext = createContext<BoardDragState>({
     draggedCard: null,
-    draggedColumn: null,
-    dropPosition: null,
-    dropTarget: null
+    draggedColumn: null
 });
 
 /**
@@ -278,8 +281,17 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const [ draggedCard, setDraggedCard ] = useState<CardDrag | null>(null);
     /** The column just added, which is revealed once the board has drawn it. */
     const [ createdColumn, setCreatedColumn ] = useState<string>();
-    const [ dropTarget, setDropTarget ] = useState<string | null>(null);
-    const [ dropPosition, setDropPosition ] = useState<{ column: string, index: number } | null>(null);
+    /**
+     * Where the gap stands, kept out of the board's state so that a step of a drag draws no column
+     * the gap is not near.
+     */
+    const dropState = useMemo(() => new DropStateStore(), []);
+    const setDropPosition = useCallback((position: ColumnDrag | null) => {
+        dropState.set({ ...dropState.get(), position });
+    }, [ dropState ]);
+    const setDropTarget = useCallback((target: string | null) => {
+        dropState.set({ ...dropState.get(), target });
+    }, [ dropState ]);
     const [ draggedColumn, setDraggedColumn ] = useState<ColumnDrag | null>(null);
     const [ columnDropPosition, setColumnDropPosition ] = useState<number | null>(null);
     const [ branchIdToEdit, setBranchIdToEdit ] = useState<string>();
@@ -462,10 +474,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         branchIdToEdit,
         columnNameToEdit,
         draggedCard,
-        draggedColumn,
-        dropPosition,
-        dropTarget
-    }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn, dropPosition, dropTarget ]);
+        draggedColumn
+    }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn ]);
 
     function refresh() {
         // A move under way has already been drawn where it will land. Held here rather than at each
@@ -561,8 +571,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             height: card.height
         }),
         onCardMove: (position, inside) => {
-            setDropTarget(position?.column ?? null);
-            setDropPosition(position);
+            // Written together: two writes would wake every column watching the gap twice over.
+            dropState.set({ position, target: position?.column ?? null });
             // Answers for what a `dragover` did, for a collapsed column the card is actually over:
             // one merely passed near keeps to itself, and one already opened stays open, since
             // closing it under a drag would move every column after it.
@@ -595,8 +605,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                     .finally(() => { movesInFlight.current--; });
             }
             setDraggedCard(null);
-            setDropTarget(null);
-            setDropPosition(null);
+            dropState.set({ position: null, target: null });
             // Asked for by name: the card is drawn again where it landed, and a card that crossed
             // columns is drawn as a new element, so the one that was focused is gone.
             focusCard(card.noteId);
@@ -760,6 +769,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                 <BoardPromotedAttributesContext.Provider value={shownAttributes}>
                 <BoardHighlightTokensContext.Provider value={filter.highlightedTokens}>
                 <BoardKeptCardsContext.Provider value={filter.keptNoteIds}>
+                <BoardDropStateContext.Provider value={dropState}>
                 <BoardDragStateContext.Provider value={boardDragState}>
                     {byColumn && columns && <div
                         ref={containerRef}
@@ -859,6 +869,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                         )}
                     </div>}
                 </BoardDragStateContext.Provider>
+                </BoardDropStateContext.Provider>
                 </BoardKeptCardsContext.Provider>
                 </BoardHighlightTokensContext.Provider>
                 </BoardPromotedAttributesContext.Provider>
