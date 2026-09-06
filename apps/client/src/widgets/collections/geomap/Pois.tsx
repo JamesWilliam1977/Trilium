@@ -87,8 +87,8 @@ export default function Pois({ placing, onPick }: PoisProps) {
 
         const onClick = (e: MapMouseEvent) => {
             if (map.getZoom() < MIN_POI_ZOOM || isOwnUnderPointer(map, e.point)) return;
-            // The device's dot stands above the base map too, but as a DOM marker the hit test
-            // cannot see; a click on it is the dot's (see useGeolocate in MapToolbar).
+            // The location dot is a DOM marker, not a layer, so poiLayers below cannot see it;
+            // isLocationDot checks the click's target directly (see useGeolocate in MapToolbar).
             if (isLocationDot(e.originalEvent.target)) return;
 
             const layers = poiLayers(map);

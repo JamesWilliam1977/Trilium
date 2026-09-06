@@ -16,8 +16,8 @@ import MapToolbar from "./MapToolbar";
 
 const { showError } = vi.hoisted(() => ({ showError: vi.fn() }));
 vi.mock("../../../services/toast", () => ({ default: { showError } }));
-// t() returns the key, so the assertions below are on which title the button wears rather than on
-// its English wording.
+// t() returns its key, so assertions below check the button's title key rather than its English
+// text.
 vi.mock("../../../services/i18n", () => ({ t: (key: string) => key }));
 
 /** The order the group lays its buttons out in — the image viewer's, with the tilt leading and the
@@ -48,16 +48,16 @@ function fakeMap({ zoom = 5, minZoom = 2, maxZoom = 22, pitch = 0 } = {}) {
         pitch = value;
         fire("pitch");
     };
-    /** The controls the map holds, which a map being removed lets go of on its own. */
+    /** Controls added via addControl; map.remove() clears them, as MapLibre's own teardown does. */
     const controls = new Set<unknown>();
 
     return {
         addControl: vi.fn((control: unknown) => { controls.add(control); }),
         removeControl: vi.fn((control: unknown) => { controls.delete(control); }),
         hasControl: (control: unknown) => controls.has(control),
-        /** The map being torn down, as `map.remove()` does before any cleanup around it runs. */
         remove: () => controls.clear(),
-        /** A click on the map, landing on the element given — as MapLibre reports one on a marker. */
+        /** Fires a map click event with `originalEvent.target` set to the given element, as MapLibre
+         *  does for a click on a marker. */
         click: (target: Element | null) => fire("click", { originalEvent: { target }, point: { x: 0, y: 0 } }),
         getZoom: () => zoom,
         getMinZoom: () => minZoom,
@@ -94,11 +94,11 @@ function setFullscreenElement(element: Element | null) {
 beforeEach(() => {
     Object.defineProperty(document, "fullscreenElement", { value: null, configurable: true });
     document.exitFullscreen = vi.fn(async () => {});
-    // What a browser offers on a secure origin, which is the only place the locate button is
-    // offered: happy-dom leaves the first undefined and the second null.
+    // happy-dom leaves isSecureContext undefined and navigator.geolocation null; canLocate needs
+    // both truthy, as a secure origin provides.
     Object.defineProperty(window, "isSecureContext", { value: true, configurable: true });
     Object.defineProperty(navigator, "geolocation", { value: {}, configurable: true });
-    // The control's own press, which would otherwise reach for the browser's geolocation.
+    // Mocked so a press does not call the real Geolocation API.
     vi.spyOn(GeolocateControl.prototype, "trigger").mockReturnValue(true);
     showError.mockClear();
 });
@@ -129,7 +129,8 @@ function press(container: HTMLElement, index: number) {
     act(() => buttons(container)[index].click());
 }
 
-/** The locate control the toolbar stood on the map, which the tests speak for as the browser would. */
+/** Returns the GeolocateControl instance MapToolbar added, so a test can fire its events as MapLibre
+ *  would. */
 function controlOn(map: ReturnType<typeof fakeMap>) {
     const control: unknown = map.addControl.mock.calls[0]?.[0];
     if (!(control instanceof GeolocateControl)) throw new Error("no locate control was added");
@@ -183,8 +184,8 @@ describe("geo map MapToolbar", () => {
         try {
             const container = renderToolbar(fakeMap());
 
-            // The tilt, the device's position and the screen remain — see the mobile note in
-            // MapToolbar.tsx.
+            // The zoom steps are hidden on mobile; the tilt, locate and fullscreen buttons remain
+            // (see the mobile note in MapToolbar.tsx).
             expect(buttons(container).map((button) => button.className)).toEqual([
                 expect.stringContaining("geo-map-tilt-button"),
                 expect.stringContaining("bx-current-location"),
@@ -207,12 +208,14 @@ describe("geo map MapToolbar", () => {
 
         expect(map.addControl).toHaveBeenCalledTimes(1);
         const control = controlOn(map);
-        // A toggle that follows the device rather than a button that flies there once.
+        // trackUserLocation: true keeps following the device rather than jumping there once.
         expect(control.options.trackUserLocation).toBe(true);
-        // GPS where the device has it; MapLibre's default settles for a coarse fix.
+        // enableHighAccuracy requests GPS; MapLibre's default position options settle for a coarser
+        // fix.
         expect(control.options.positionOptions?.enableHighAccuracy).toBe(true);
 
-        // MapLibre builds the control's white box; the toolbar wears the button instead.
+        // GeolocateControl's own button is hidden by HiddenGeolocateControl; MapToolbar's
+        // OverlayControlButton is used instead.
         const box = document.createElement("div");
         vi.spyOn(GeolocateControl.prototype, "onAdd").mockReturnValue(box);
         expect(control.onAdd(map as unknown as MapLibreGLMap)).toBe(box);
@@ -221,8 +224,8 @@ describe("geo map MapToolbar", () => {
         act(() => { render(null, container); });
         expect(map.removeControl).toHaveBeenCalledWith(control);
 
-        // A map torn down first has let go of the control already, and is not asked to again —
-        // MapLibre throws for a control it no longer holds.
+        // If the map was torn down first, its controls are already gone; removeControl must not be
+        // called again, since MapLibre throws for a control the map no longer holds.
         const torn = fakeMap();
         const second = renderToolbar(torn);
         torn.remove();
@@ -242,7 +245,7 @@ describe("geo map MapToolbar", () => {
         press(container, LOCATE);
         expect(control.trigger).toHaveBeenCalledTimes(1);
 
-        // The press as the control reports it: waiting on the browser, then following the fix.
+        // trackuserlocationstart sets "waiting"; the first geolocate event sets "following".
         act(() => { control.fire("trackuserlocationstart"); });
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate-waiting");
         expect(button().classList.contains("active")).toBe(true);
@@ -253,8 +256,8 @@ describe("geo map MapToolbar", () => {
         expect(button().classList.contains("active")).toBe(true);
         expect(button().classList.contains("locating")).toBe(false);
 
-        // A drag frees the camera. The control says the tracking ended and, in the same breath,
-        // that the dot merely lost the camera; the second word is the one that counts.
+        // A drag fires trackuserlocationend and userlocationlostfocus together; the state ends at
+        // "background", not "off", since userlocationlostfocus is handled after.
         act(() => {
             control.fire("trackuserlocationend");
             control.fire("userlocationlostfocus");
@@ -262,7 +265,7 @@ describe("geo map MapToolbar", () => {
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate-return");
         expect(button().classList.contains("active")).toBe(false);
 
-        // Pressed again, the camera returns to the dot.
+        // A press with the camera free fires trackuserlocationstart, then userlocationfocus.
         act(() => {
             control.fire("trackuserlocationstart");
             control.fire("userlocationfocus");
@@ -270,7 +273,7 @@ describe("geo map MapToolbar", () => {
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate-following");
         expect(button().classList.contains("active")).toBe(true);
 
-        // Pressed while following, the watch stops: the drag's first word with no second one.
+        // A press while following fires only trackuserlocationend, so the state goes to "off".
         act(() => { control.fire("trackuserlocationend"); });
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate");
         expect(button().classList.contains("active")).toBe(false);
@@ -288,15 +291,15 @@ describe("geo map MapToolbar", () => {
         expect(showError).toHaveBeenCalledTimes(1);
         expect(showError).toHaveBeenLastCalledWith("geo-map.location-unavailable");
 
-        // The watch goes on reporting the same failure; the reader was told the first time.
+        // The watch keeps firing the same error; showError must not be called again for it.
         act(() => { control.fire("error", { code: 2, message: "unavailable" }); });
         expect(showError).toHaveBeenCalledTimes(1);
 
-        // A fix arriving after all takes the word back.
+        // A later successful fix clears the error state.
         act(() => { control.fire("geolocate", { coords: {}, timestamp: 0 }); });
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate-following");
 
-        // Denied is the end of it: the control clears its watch, and the button stands down.
+        // A denied permission is terminal: the button is disabled and its title reflects that.
         act(() => { control.fire("error", { code: 1, message: "denied" }); });
         expect(button().disabled).toBe(true);
         expect(button().getAttribute("aria-label")).toBe("geo-map.locate-unavailable");
@@ -308,13 +311,13 @@ describe("geo map MapToolbar", () => {
         const onLocationClick = vi.fn();
         renderToolbar(map, { onLocationClick });
         const control = controlOn(map);
-        // The two markers the control draws, as MapLibre's stylesheet names them.
+        // Class names match MapLibre's own dot and accuracy-circle markers.
         const dot = document.createElement("div");
         dot.className = "maplibregl-marker maplibregl-user-location-dot";
         const circle = document.createElement("div");
         circle.className = "maplibregl-marker maplibregl-user-location-accuracy-circle";
 
-        // No fix yet, so nothing stands where a click could land on it.
+        // No geolocate event yet, so lastFix is null and the click is ignored.
         act(() => { map.click(dot); });
         expect(onLocationClick).not.toHaveBeenCalled();
 
@@ -323,14 +326,15 @@ describe("geo map MapToolbar", () => {
         act(() => { map.click(null); });
         expect(onLocationClick).not.toHaveBeenCalled();
 
-        // Where the dot stands rather than where on it the click fell.
+        // onLocationClick receives lastFix, not the click's own coordinates on the dot.
         act(() => { map.click(dot); });
         expect(onLocationClick).toHaveBeenCalledTimes(1);
         expect(onLocationClick).toHaveBeenCalledWith({ lat: 45.9432, lng: 24.9668 });
     });
 
     it("keeps the locate button off a map that cannot ask where the device is", () => {
-        // What a browser says of a page served over plain HTTP, where the Geolocation API refuses.
+        // isSecureContext is false for a page served over plain HTTP; canLocate requires a secure
+        // origin.
         Object.defineProperty(window, "isSecureContext", { value: false, configurable: true });
         const map = fakeMap();
         const container = renderToolbar(map);
@@ -401,7 +405,7 @@ describe("geo map MapToolbar", () => {
     it("stops listening to a map it is taken off", () => {
         const map = fakeMap();
         const container = renderToolbar(map);
-        // One listener for the zoom, one for the pitch, one for a click on the device's dot.
+        // One map.on listener each for zoom, pitch, and the dot-click handler.
         expect(map.listenerCount).toBe(3);
 
         // A map torn down under controls that stayed behind would go on being reported to.

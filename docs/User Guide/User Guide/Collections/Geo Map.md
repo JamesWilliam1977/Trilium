@@ -60,7 +60,7 @@ Click the dot to see its coordinates in the panel a searched place is shown in. 
 
 If the position cannot be found, a message says so and the button keeps waiting for one; press it again to stop. If you refuse the permission, the button is disabled until the map is opened again. To allow it after all, change the permission for Trilium in the browser or in the system's location settings.
 
-Your position is not stored in the note and is not sent anywhere. The map does remember where you left it, as it does after any other movement, so a map you have taken to your location opens there the next time.
+Your position is not stored in the note, and Trilium does not send it anywhere on its own. Moving the map there does what any other pan or zoom does: the tile provider behind the map's style sees the coordinates of the area now on screen. The map does remember where you left it, as it does after any other movement, so a map you have taken to your location opens there the next time.
 
 ## Searching the map
 

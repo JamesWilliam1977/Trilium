@@ -195,9 +195,9 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
     }, []);
 
     /**
-     * Stands the map on the device's own position, as it stands on a point typed into the search bar:
-     * the coordinates under a pin, offered for keeping as a marker (see PlacePanel). Not while a click
-     * is armed to place a note, when the click means that instead.
+     * Points the map at the device's position the same way it points at a typed coordinate: pickPlace
+     * opens it as a place, offered for keeping as a marker (see PlacePanel). Does nothing while a click
+     * is armed to place a note instead.
      */
     const showLocation = useCallback((location: { lat: number; lng: number }) => {
         if (placement) return;
@@ -446,8 +446,8 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
 }
 
 /**
- * A coordinate to the six decimals a place is named and stored to, which name a spot to within a
- * stride (see `formatLocation` in Markers). A fix carries digits far beyond that.
+ * Rounds a coordinate to six decimals, the precision a place is named and stored at (see
+ * `formatLocation` in Markers). A geolocation fix reports far more digits than that.
  */
 function roundCoordinate(value: number) {
     return Number(value.toFixed(6));

@@ -79,11 +79,11 @@ export function formatCoordinates([ lng, lat ]: [number, number]) {
 export const POINT_ZOOM = 16;
 
 /**
- * A bare point as a place, like any the geocoder answers with, so that standing the map on it pins
- * it and offers it for keeping exactly as a searched place is (see PlacePanel). It has no name of
- * its own, which is why it is named by its coordinates and marked `unnamed`.
+ * Builds a `GeoSearchResult` for a bare coordinate, shaped like any geocoder result so `pickPlace`
+ * can pin it and offer it for keeping as a marker (see PlacePanel). It has no name, so it is named by
+ * its own coordinates and marked `unnamed`.
  *
- * Serves the point typed into the search bar and the dot the locate button draws for the device.
+ * Used for a coordinate typed into the search bar and for the device's location fix.
  */
 export function pointPlace(center: [number, number]): GeoSearchResult {
     const [ lng, lat ] = center;
