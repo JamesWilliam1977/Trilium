@@ -3,14 +3,19 @@ import $ from "jquery";
 
 // --- Mocks (hoisted above imports) ---
 
-const { triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote, getInboxNotePath, getInboxTarget, translate, getAllCommands, searchCommands } = vi.hoisted(() => ({
+const {
+    triggerCommand, getActiveContextNoteId, getActiveContext, chooseNoteType, createNote,
+    getInboxNotePath, getInboxTarget, translate, getAllCommands, searchCommands
+} = vi.hoisted(() => ({
     triggerCommand: vi.fn(),
     getActiveContextNoteId: vi.fn<() => string | null>(() => "activeNote"),
     getActiveContext: vi.fn<() => any>(() => ({ hoistedNoteId: "hoisted" })),
     chooseNoteType: vi.fn(),
     createNote: vi.fn(),
     getInboxNotePath: vi.fn<() => Promise<string | undefined>>(async () => "root/inbox"),
-    getInboxTarget: vi.fn<() => Promise<unknown>>(async () => ({ kind: "inbox", noteId: "inb", title: "Inbox" })),
+    getInboxTarget: vi.fn<() => Promise<unknown>>(
+        async () => ({ kind: "inbox", noteId: "inb", title: "Inbox" })
+    ),
     // i18next is never initialised here, so the real `t` returns undefined. Echoing the key
     // keeps the label assertions about which string is chosen rather than about its English.
     translate: vi.fn((key: string, _opts?: Record<string, unknown>) => key),
@@ -148,8 +153,8 @@ describe("note_autocomplete", () => {
             // only the synthetic creation rows remain; they have no notePathTitle.
             const createRow = result.find((r) => r.action === "create-note");
             expect(createRow).toBeDefined();
-            expect(createRow!.name).toBe("");
-            expect(createRow!.id).toBe("@undefined");
+            expect(createRow?.name).toBe("");
+            expect(createRow?.id).toBe("@undefined");
         });
     });
 });

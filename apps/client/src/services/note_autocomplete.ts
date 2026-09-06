@@ -32,8 +32,7 @@ async function getInboxTarget() {
     try {
         return await dateNoteService.getInboxTarget();
     } catch (e) {
-        // A destination that cannot be named is not worth failing the dropdown over: the
-        // entry falls back to a label without one.
+        // The entry falls back to a label with no destination rather than failing the dropdown.
         logError(`Unable to resolve the inbox target: ${e}`);
         return null;
     }
@@ -166,8 +165,7 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
     const activeNoteId = appContext.tabManager.getActiveContextNoteId();
     const length = term.trim().length;
 
-    // Started before the search rather than after it, so naming the destination costs a request
-    // but no extra wait.
+    // Runs concurrently with the search, so naming the destination costs a request but no wait.
     const pendingInboxTarget = length >= 1 && options.allowCreatingNotes ? getInboxTarget() : null;
 
     let results = await server.get<Suggestion[]>(`autocomplete?query=${encodeURIComponent(term)}&activeNoteId=${activeNoteId}&fastSearch=${fastSearch}`);

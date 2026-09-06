@@ -794,8 +794,8 @@ export type SimilarNoteResponse = SimilarNote[];
 export type SaveSearchNoteResponse = CloneResponse;
 
 /**
- * Which rule decided where a quickly captured note goes. `dayNote` is the only one that
- * names no note, because the day note is created when the capture happens.
+ * Which rule decided where a quickly captured note goes. `dayNote` carries no note ID, because
+ * the day note is created at capture time.
  */
 export type InboxTargetKind = "inbox" | "workspaceInbox" | "workspaceRoot" | "dayNote" | "root";
 

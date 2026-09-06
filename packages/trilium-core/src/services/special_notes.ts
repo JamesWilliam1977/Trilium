@@ -10,7 +10,10 @@ import SearchContext from "./search/search_context.js";
 import { LBTPL_NOTE_LAUNCHER, LBTPL_CUSTOM_WIDGET, LBTPL_SPACER, LBTPL_SCRIPT } from "./hidden_subtree.js";
 import { t } from "i18next";
 import BNote from '../becca/entities/bnote.js';
-import { InboxTargetKind, InboxTargetResponse, SaveLlmChatResponse, SaveSearchNoteResponse, SaveSqlConsoleResponse } from "@triliumnext/commons";
+import {
+    InboxTargetKind, InboxTargetResponse, SaveLlmChatResponse, SaveSearchNoteResponse,
+    SaveSqlConsoleResponse
+} from "@triliumnext/commons";
 
 function getInboxNote(date: string) {
     const { note } = resolveInboxTarget();
@@ -19,9 +22,8 @@ function getInboxNote(date: string) {
 }
 
 /**
- * Decides where a quickly captured note goes, without creating anything. `getInboxNote()`
- * creates the day note it falls back to, so callers that only want to name the destination —
- * the note autocomplete labels its creation entry with it — go through this instead.
+ * Decides where a quickly captured note goes. Creates nothing, unlike `getInboxNote()`, which
+ * creates the day note it falls back to. Use this to name the destination without capturing.
  */
 function resolveInboxTarget(): { kind: InboxTargetKind; note?: BNote } {
     const workspaceNote = hoistedNoteService.getWorkspaceNote();
