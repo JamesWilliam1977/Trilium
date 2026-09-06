@@ -16,6 +16,7 @@ import { ViewModeProps } from "../interface";
 import { createNewNote, createNoteForPlace, importGpxTrack, moveMarker } from "./api";
 import Buildings from "./Buildings";
 import ContextMenus from "./ContextMenus";
+import { pointPlace } from "./coordinates";
 import DetailPane, { PaneSelection } from "./DetailPane";
 import EditToolbar from "./EditToolbar";
 import GhostPin from "./GhostPin";
@@ -192,6 +193,16 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
                 .catch((e) => logError(`Fetching the boundary of "${place.label}" failed: ${e}`));
         }, OUTLINE_DELAY_MS);
     }, []);
+
+    /**
+     * Points the map at the device's position the same way it points at a typed coordinate: pickPlace
+     * opens it as a place, offered for keeping as a marker (see PlacePanel). Does nothing while a click
+     * is armed to place a note instead.
+     */
+    const showLocation = useCallback((location: { lat: number; lng: number }) => {
+        if (placement) return;
+        pickPlace(pointPlace([ roundCoordinate(location.lng), roundCoordinate(location.lat) ]));
+    }, [ placement, pickPlace ]);
 
     /**
      * Stands the map on one of a search's results: a place under a pin of its own, or a note of the
@@ -394,7 +405,7 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
                         onAddMarker={keepPlaceAsMarker} onClose={() => pickPlace(null)}
                     />
                 </>}
-                <MapToolbar />
+                <MapToolbar onLocationClick={showLocation} />
                 <EditToolbar
                     isReadOnly={isReadOnly}
                     placing={placement?.mode === "new"}
@@ -432,6 +443,14 @@ export default function GeoView({ note, noteIds, viewConfig, saveConfig }: ViewM
             </Map>}
         </div>
     );
+}
+
+/**
+ * Rounds a coordinate to six decimals, the precision a place is named and stored at (see
+ * `formatLocation` in Markers). A geolocation fix reports far more digits than that.
+ */
+function roundCoordinate(value: number) {
+    return Number(value.toFixed(6));
 }
 
 /**
