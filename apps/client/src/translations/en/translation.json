@@ -3494,7 +3494,8 @@
       "move_column_to_edge": "Move the column to the far left / right"
     },
     "status-alias": "Status",
-    "filter-placeholder": "Filter board..."
+    "filter-placeholder": "Filter board...",
+    "card-outside-filter": "This card is outside of the current filtering scope"
   },
   "dashboard_view": {
     "refresh-widget": "Refresh",

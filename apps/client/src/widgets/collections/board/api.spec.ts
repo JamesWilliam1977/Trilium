@@ -69,7 +69,8 @@ function createApi(
     parentNote?: FNote,
     statusAttribute = "status",
     byColumn: ColumnMap = new Map(),
-    allByColumn?: ColumnMap
+    allByColumn?: ColumnMap,
+    keepNote?: (noteId: string) => void
 ) {
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
@@ -86,7 +87,8 @@ function createApi(
         (branchId) => editing.push(branchId),
         pending,
         getStatusDefinition(board, statusAttribute),
-        allByColumn
+        allByColumn,
+        keepNote
     );
     return { api, board, saved, editing, pendingRenames: pending.renames };
 }
@@ -621,13 +623,49 @@ describe("BoardApi card operations", () => {
             .toHaveBeenCalledWith([ spare.branch.branchId ], done[0].branch.branchId);
     });
 
-    it("sends a card to the true end of a column a filter narrows", async () => {
+    it("sends a card after the last one drawn in a column a filter narrows", async () => {
         const { api, done, spare } = createBoardWithSpareCard((all) => [ all[0] ]);
 
         await api.moveToColumnEnd(spare.note.noteId, spare.branch.branchId, "Done");
 
         expect(branches.moveAfterBranch)
+            .toHaveBeenCalledWith([ spare.branch.branchId ], done[0].branch.branchId);
+    });
+
+    it("sends a card past the cards a filter hides when it draws none of them", async () => {
+        const { api, done, spare } = createBoardWithSpareCard(() => []);
+
+        await api.moveToColumnEnd(spare.note.noteId, spare.branch.branchId, "Done");
+
+        expect(branches.moveAfterBranch)
             .toHaveBeenCalledWith([ spare.branch.branchId ], done[2].branch.branchId);
+    });
+
+    /**
+     * A card is rarely made to match the query in force, so one made here is drawn anyway rather
+     * than the board answering an addition by showing nothing at all.
+     */
+    it("reports every card it gains, so a filter does not swallow it", async () => {
+        const kept: string[] = [];
+        const { api } = createApi(
+            {}, [ "Done" ], undefined, "status", new Map(), undefined,
+            (noteId) => kept.push(noteId));
+        vi.mocked(note_create.createNote).mockResolvedValue(
+            { note: { noteId: "made" } } as never);
+
+        await api.createNewItem("Done", "Made now");
+
+        expect(kept).toEqual([ "made" ]);
+    });
+
+    it("makes a card at the head of a column above the first one drawn", async () => {
+        const { api, done } = createBoardWithSpareCard((all) => [ all[1] ]);
+
+        await api.createNewItem("Done", "Newest", "top");
+
+        expect(note_create.createNote).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ target: "before", targetBranchId: done[1].branch.branchId }));
     });
 
     it("reorders within a column, and places past the last card after it", async () => {

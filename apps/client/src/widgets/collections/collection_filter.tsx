@@ -28,8 +28,10 @@ const TOOLTIP_CONFIG: Partial<Tooltip.Options> = {
 export interface CollectionFilter {
     /** The submitted query, empty while no filter is active. */
     query: string;
-    /** The notes the query matches, or null while no filter is active. */
-    matchedNoteIds: Set<string> | null;
+    /** The notes to draw, or null while no filter is active. Matches plus {@link keptNoteIds}. */
+    shownNoteIds: Set<string> | null;
+    /** Of those, the ones the query does not match, drawn because they were just made here. */
+    keptNoteIds: Set<string>;
     /** The tokens the matches were found by, for highlighting them where the notes are drawn. */
     highlightedTokens: HighlightedTokenInfo[] | null;
     /** What is wrong with the query, or null. An erroneous query keeps the previous matches. */
@@ -39,6 +41,8 @@ export interface CollectionFilter {
      * a stored one: a query submitted later narrows a collection that is already on screen.
      */
     isResolvingStoredQuery: boolean;
+    /** Draws a note the query does not match, until the query is changed. */
+    keepNote: (noteId: string) => void;
     setQuery: (query: string) => void;
 }
 
@@ -48,6 +52,7 @@ interface FilterMatches {
 }
 
 const NO_MATCHES: FilterMatches = { matchedNoteIds: null, highlightedTokens: null };
+const NOTHING_KEPT: Set<string> = new Set();
 
 /**
  * Narrows a collection to the notes matching a search query, using the full search syntax.
@@ -70,6 +75,9 @@ export function useCollectionFilter(note: FNote, {
     // matches instead of drawing every note and then taking most of them away.
     const [ isResolvingStoredQuery, setIsResolvingStoredQuery ] =
         useState(() => !!persistedQuery?.trim());
+    // Notes made in the collection while it is narrowed, drawn until the query changes. A re-run
+    // does not take them away: a note made here and not shown would look like nothing happened.
+    const [ keptNoteIds, setKeptNoteIds ] = useState(NOTHING_KEPT);
     // A run resolves on the server, so an older one can land after a newer one. Only the latest
     // run sets the result.
     const runSeqRef = useRef(0);
@@ -126,9 +134,11 @@ export function useCollectionFilter(note: FNote, {
         }
     }, [ note.noteId, persistedQuery ]);
 
-    // Resolve the submitted query, or drop the filter when it is cleared.
+    // Resolve the submitted query, or drop the filter when it is cleared. What was kept goes with
+    // the query it was kept against: a new one is asked afresh which notes belong.
     useEffect(() => {
         window.clearTimeout(rerunTimerRef.current);
+        setKeptNoteIds(NOTHING_KEPT);
         if (!query.trim()) {
             runSeqRef.current++;
             setError(null);
@@ -150,11 +160,30 @@ export function useCollectionFilter(note: FNote, {
 
     useEffect(() => () => window.clearTimeout(rerunTimerRef.current), []);
 
+    // Only what the query does not match, so a note that comes to match it on a later run stops
+    // being drawn on sufferance and is no longer marked as outside the filter. Nothing stands
+    // outside a filter that is not there, whatever the collection has reported in the meantime.
+    const stillKept = useMemo(
+        () => (matches.matchedNoteIds
+            ? new Set([ ...keptNoteIds ].filter(id => !matches.matchedNoteIds?.has(id)))
+            : NOTHING_KEPT),
+        [ keptNoteIds, matches.matchedNoteIds ]);
+    const shownNoteIds = useMemo(
+        () => (matches.matchedNoteIds
+            ? new Set([ ...matches.matchedNoteIds, ...stillKept ])
+            : null),
+        [ matches.matchedNoteIds, stillKept ]);
+
     return {
         query,
-        ...matches,
+        shownNoteIds,
+        keptNoteIds: stillKept,
+        highlightedTokens: matches.highlightedTokens,
         error,
         isResolvingStoredQuery,
+        keepNote: (noteId: string) => setKeptNoteIds(kept => (!query.trim() || kept.has(noteId)
+            ? kept
+            : new Set(kept).add(noteId))),
         setQuery: (newQuery: string) => {
             const trimmed = newQuery.trim();
             setQuery(trimmed);

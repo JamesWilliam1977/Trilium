@@ -206,6 +206,9 @@ export const BoardDragStateContext = createContext<BoardDragState>({
  */
 export const BoardHighlightTokensContext = createContext<HighlightedTokenInfo[] | null>(null);
 
+/** The cards drawn although the filter does not match them, which say as much on their face. */
+export const BoardKeptCardsContext = createContext<Set<string>>(new Set());
+
 /**
  * What the board answers with when asked for contextual keyboard help. Every entry is a key the
  * board handles itself (see `keyboard.ts` and the card and column handlers), none of them
@@ -353,9 +356,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     // filter matches, and withheld until a query stored in `board.json` has said what it matches.
     const byColumn = useMemo(
         () => (allByColumn && !filter.isResolvingStoredQuery
-            ? filterColumnMap(allByColumn, filter.matchedNoteIds)
+            ? filterColumnMap(allByColumn, filter.shownNoteIds)
             : undefined),
-        [ allByColumn, filter.matchedNoteIds, filter.isResolvingStoredQuery ]);
+        [ allByColumn, filter.shownNoteIds, filter.isResolvingStoredQuery ]);
 
     if (!apiRef.current || apiRef.current.board !== boardIdentity) {
         apiRef.current = {
@@ -363,12 +366,12 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             api: new Api(
                 byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
                 saveConfig, setBranchIdToEdit, pendingRenamesRef.current.writes, statusDefinition,
-                allByColumn)
+                allByColumn, filter.keepNote)
         };
     } else {
         apiRef.current.api.update(
             byColumn, usableColumns, parentNote, statusAttributeWithPrefix, viewConfig,
-            saveConfig, setBranchIdToEdit, statusDefinition, allByColumn);
+            saveConfig, setBranchIdToEdit, statusDefinition, allByColumn, filter.keepNote);
     }
     const api = apiRef.current.api;
     // Every member is one of useState's own setters, so this value is built once and never changes
@@ -758,6 +761,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             <BoardActionsContext.Provider value={boardActions}>
                 <BoardPromotedAttributesContext.Provider value={shownAttributes}>
                 <BoardHighlightTokensContext.Provider value={filter.highlightedTokens}>
+                <BoardKeptCardsContext.Provider value={filter.keptNoteIds}>
                 <BoardDragStateContext.Provider value={boardDragState}>
                     {byColumn && columns && <div
                         ref={containerRef}
@@ -857,6 +861,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                         )}
                     </div>}
                 </BoardDragStateContext.Provider>
+                </BoardKeptCardsContext.Provider>
                 </BoardHighlightTokensContext.Provider>
                 </BoardPromotedAttributesContext.Provider>
             </BoardActionsContext.Provider>

@@ -1,12 +1,15 @@
+import type { Tooltip } from "bootstrap";
 import { memo } from "preact/compat";
 import {
     useCallback, useContext, useEffect, useLayoutEffect, useRef, useState
 } from "preact/hooks";
+
 import FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import BoardApi from "./api";
 import {
-    BoardActionsContext, BoardHighlightTokensContext, BoardPromotedAttributesContext, TitleEditor
+    BoardActionsContext, BoardHighlightTokensContext, BoardKeptCardsContext,
+    BoardPromotedAttributesContext, TitleEditor
 } from ".";
 import { ContextMenuEvent } from "../../../menus/context_menu";
 import { openNoteContextMenu } from "./context_menu";
@@ -15,7 +18,8 @@ import UserAttributesDisplay from "../../attribute_widgets/UserAttributesList";
 import { parseNavigationStateFromUrl } from "../../../services/link";
 import { FLIP_SETTLE_MS } from "../../react/flip";
 import {
-    useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useTriliumEvent
+    useNoteColorClass, useNoteIcon, useNoteLabel, useNoteLabelBoolean, useStaticTooltip,
+    useTriliumEvent
 } from "../../react/hooks";
 import { HighlightedText } from "../../react/RawHtml";
 
@@ -64,6 +68,7 @@ function Card({
     const { setBranchIdToEdit } = useContext(BoardActionsContext);
     const shownAttributes = useContext(BoardPromotedAttributesContext);
     const highlightedTokens = useContext(BoardHighlightTokensContext);
+    const isOutsideFilter = useContext(BoardKeptCardsContext).has(note.noteId);
     // Tracks the `color` label, which the board does not redraw a card for.
     const colorClass = useNoteColorClass(note) || "";
     const editorRef = useRef<HTMLInputElement>(null);
@@ -207,6 +212,7 @@ function Card({
                         note={note}
                         ignoredAttributes={[statusAttribute]}
                         shownAttributes={shownAttributes}
+                        badges={isOutsideFilter && <OutsideFilterBadge />}
                     />
                 </>
             ) : (
@@ -229,6 +235,20 @@ function Card({
         </div>
     )
 }
+
+/** Marks a card drawn although the filter does not match it, which one just made here is. */
+function OutsideFilterBadge() {
+    const badgeRef = useRef<HTMLSpanElement>(null);
+    useStaticTooltip(badgeRef, OUTSIDE_FILTER_TOOLTIP);
+
+    return <span ref={badgeRef} className="board-note-outside-filter icon bx bx-time-five" />;
+}
+
+const OUTSIDE_FILTER_TOOLTIP: Partial<Tooltip.Options> = {
+    title: t("board_view.card-outside-filter"),
+    placement: "bottom",
+    animation: false
+};
 
 /**
  * Memoized because a board holds hundreds of these and most redraws change none of them: a drag

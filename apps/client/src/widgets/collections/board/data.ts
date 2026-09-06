@@ -43,19 +43,19 @@ export function applyCardMove(
 }
 
 /**
- * The columns with only the cards in `matchedNoteIds`, keeping their order relative to each other.
+ * The columns with only the cards in `shownNoteIds`, keeping their order relative to each other.
  * Every column is kept, since a filter narrows what is drawn and nothing else.
  */
 export function filterColumnMap(
-    byColumn: ColumnMap, matchedNoteIds: Set<string> | null
+    byColumn: ColumnMap, shownNoteIds: Set<string> | null
 ): ColumnMap {
-    if (!matchedNoteIds) {
+    if (!shownNoteIds) {
         return byColumn;
     }
 
     const filtered: ColumnMap = new Map();
     for (const [ column, items ] of byColumn) {
-        filtered.set(column, items.filter(item => matchedNoteIds.has(item.note.noteId)));
+        filtered.set(column, items.filter(item => shownNoteIds.has(item.note.noteId)));
     }
     return filtered;
 }

@@ -116,7 +116,7 @@ describe("useCollectionFilter", () => {
         searchInSubtree.mockResolvedValue(matchResponse([ "n1", "n2" ]));
         const note = await mount({});
 
-        expect(currentFilter?.matchedNoteIds).toBeNull();
+        expect(currentFilter?.shownNoteIds).toBeNull();
         expect(searchInSubtree).not.toHaveBeenCalled();
 
         await act(async () => {
@@ -126,7 +126,7 @@ describe("useCollectionFilter", () => {
         await settle();
 
         expect(searchInSubtree).toHaveBeenCalledWith("#done", note.noteId);
-        expect([ ...(currentFilter?.matchedNoteIds ?? []) ]).toEqual([ "n1", "n2" ]);
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "n1", "n2" ]);
         expect(currentFilter?.highlightedTokens).toEqual([ { token: "match", type: "plain" } ]);
 
         await act(async () => {
@@ -134,7 +134,7 @@ describe("useCollectionFilter", () => {
             await flushMicrotasks();
         });
 
-        expect(currentFilter?.matchedNoteIds).toBeNull();
+        expect(currentFilter?.shownNoteIds).toBeNull();
         expect(currentFilter?.highlightedTokens).toBeNull();
     });
 
@@ -157,7 +157,7 @@ describe("useCollectionFilter", () => {
         const note = await mount({ persistedQuery: "#done" });
 
         expect(searchInSubtree).toHaveBeenCalledWith("#done", note.noteId);
-        expect(currentFilter?.matchedNoteIds?.has("n1")).toBe(true);
+        expect(currentFilter?.shownNoteIds?.has("n1")).toBe(true);
     });
 
     it("holds while a stored query resolves, and not for one submitted afterwards", async () => {
@@ -201,6 +201,77 @@ describe("useCollectionFilter", () => {
         expect(currentFilter?.isResolvingStoredQuery).toBe(false);
     });
 
+    // Nothing stands outside a filter that is not there, so a note reported while the collection
+    // is whole must not come back marked.
+    it("keeps nothing while no filter is active", async () => {
+        await mount({});
+
+        await act(async () => { currentFilter?.keepNote("made"); });
+
+        expect(currentFilter?.keptNoteIds.size).toBe(0);
+        expect(currentFilter?.shownNoteIds).toBeNull();
+    });
+
+    /** A note made in a narrowed collection is drawn although the query misses it. */
+    it("draws a kept note the query misses, and marks it, until the query changes", async () => {
+        vi.useFakeTimers();
+        searchInSubtree.mockResolvedValue(matchResponse([ "n1" ]));
+        const note = await mount({ collectionNoteIds: [ "n1" ] });
+
+        await act(async () => {
+            currentFilter?.setQuery("#done");
+            await vi.advanceTimersByTimeAsync(0);
+        });
+        await act(async () => { currentFilter?.keepNote("made"); });
+
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "n1", "made" ]);
+        expect([ ...(currentFilter?.keptNoteIds ?? []) ]).toEqual([ "made" ]);
+
+        // A re-run that still misses it leaves it drawn: it was made here, on this query.
+        await act(async () => {
+            await parent.handleEvent("entitiesReloaded", {
+                loadResults: branchEntitiesReloaded(note.noteId, "made")
+            });
+            await vi.advanceTimersByTimeAsync(400);
+        });
+        expect(currentFilter?.shownNoteIds?.has("made")).toBe(true);
+
+        // Another query is asked afresh which notes belong.
+        searchInSubtree.mockResolvedValue(matchResponse([ "n2" ]));
+        await act(async () => {
+            currentFilter?.setQuery("#other");
+            await vi.advanceTimersByTimeAsync(0);
+        });
+        await settle();
+
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "n2" ]);
+        expect(currentFilter?.keptNoteIds.size).toBe(0);
+    });
+
+    it("stops marking a kept note once the query comes to match it", async () => {
+        vi.useFakeTimers();
+        searchInSubtree.mockResolvedValue(matchResponse([ "n1" ]));
+        const note = await mount({ collectionNoteIds: [ "n1" ] });
+
+        await act(async () => {
+            currentFilter?.setQuery("#done");
+            await vi.advanceTimersByTimeAsync(0);
+        });
+        await act(async () => { currentFilter?.keepNote("made"); });
+        expect(currentFilter?.keptNoteIds.has("made")).toBe(true);
+
+        searchInSubtree.mockResolvedValue(matchResponse([ "n1", "made" ]));
+        await act(async () => {
+            await parent.handleEvent("entitiesReloaded", {
+                loadResults: branchEntitiesReloaded(note.noteId, "made")
+            });
+            await vi.advanceTimersByTimeAsync(400);
+        });
+
+        expect(currentFilter?.shownNoteIds?.has("made")).toBe(true);
+        expect(currentFilter?.keptNoteIds.has("made")).toBe(false);
+    });
+
     it("keeps the previous matches when a query comes back with an error", async () => {
         searchInSubtree.mockResolvedValueOnce(matchResponse([ "n1" ]));
         await mount({});
@@ -219,7 +290,7 @@ describe("useCollectionFilter", () => {
         await settle();
 
         expect(currentFilter?.error).toBe("broken query");
-        expect([ ...(currentFilter?.matchedNoteIds ?? []) ]).toEqual([ "n1" ]);
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "n1" ]);
 
         // A good query clears the error and takes over.
         searchInSubtree.mockResolvedValueOnce(matchResponse([ "n2" ]));
@@ -230,7 +301,7 @@ describe("useCollectionFilter", () => {
         await settle();
 
         expect(currentFilter?.error).toBeNull();
-        expect([ ...(currentFilter?.matchedNoteIds ?? []) ]).toEqual([ "n2" ]);
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "n2" ]);
     });
 
     it("lets only the newest run set the result when runs resolve out of order", async () => {
@@ -251,7 +322,7 @@ describe("useCollectionFilter", () => {
             await flushMicrotasks();
         });
 
-        expect([ ...(currentFilter?.matchedNoteIds ?? []) ]).toEqual([ "newer" ]);
+        expect([ ...(currentFilter?.shownNoteIds ?? []) ]).toEqual([ "newer" ]);
     });
 
     it("re-runs an active filter, debounced, when a change touches the collection", async () => {
@@ -318,10 +389,12 @@ describe("CollectionFilterInput", () => {
     function mountInput(overrides: Partial<CollectionFilter> = {}) {
         const filter: CollectionFilter = {
             query: "",
-            matchedNoteIds: null,
+            shownNoteIds: null,
+            keptNoteIds: new Set<string>(),
             highlightedTokens: null,
             error: null,
             isResolvingStoredQuery: false,
+            keepNote: vi.fn(),
             setQuery: vi.fn(),
             ...overrides
         };

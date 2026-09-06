@@ -401,6 +401,13 @@ body.mobile .board-view-container .board-add-column {
   }
 }
 
+.board-view-container .board-note .board-note-outside-filter {
+  color: var(--muted-text-color);
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: default;
+}
+
 .board-view-container .board-note > .title > .icon {
   flex: none;
   display: flex;
