@@ -230,11 +230,8 @@ export default class BoardApi {
     }
 
     /**
-     * Keeps a card the board has just gained on screen while the board is narrowed by a filter.
-     *
-     * A card is rarely made to match the query in force, so the board would otherwise answer every
-     * addition by drawing nothing at all. It is marked as standing outside the filter, and the
-     * next query decides on it like any other card.
+     * Reports a card the board has just gained, which `useCollectionFilter` draws and marks even
+     * when the query misses it. Without this, adding a card to a filtered board shows nothing.
      */
     private keepInView(noteId: string | undefined) {
         if (noteId) {
@@ -1172,12 +1169,8 @@ export default class BoardApi {
     }
 
     /**
-     * The card a new or arriving one is placed after: the last one drawn, or the last one the
-     * column holds when a filter is drawing none of them.
-     *
-     * Placement is relative to the cards on screen, so the unfiltered map is read only where that
-     * rule has nothing to say. Left unplaced, a card would rank among the ones it cannot see by
-     * wherever it happened to sit before.
+     * The card a new or arriving one is placed after: the last one drawn, or `allByColumn`'s last
+     * where a filter draws none. Placement follows the cards on screen wherever there are any.
      */
     private lastInColumn(column: string) {
         const shown = this.byColumn?.get(column) ?? [];

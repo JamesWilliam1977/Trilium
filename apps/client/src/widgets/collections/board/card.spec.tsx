@@ -385,10 +385,7 @@ describe("Board card", () => {
     const cardIcon = (noteId: string) => card(noteId).querySelector(".title .icon")?.className ?? "";
 });
 
-/**
- * The clock a card carries while it is drawn although the filter misses it. The tooltip reaches
- * only a reader who points at it, so the name has to be on the element as well.
- */
+/** `TooltipIcon` opens its tooltip on hover, so the name has to be an attribute as well. */
 describe("OutsideFilterBadge", () => {
     it("names itself for assistive technology", () => {
         const container = document.body.appendChild(document.createElement("div"));

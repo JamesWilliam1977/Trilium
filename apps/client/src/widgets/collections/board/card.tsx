@@ -236,10 +236,8 @@ function Card({
 }
 
 /**
- * Marks a card drawn although the filter does not match it, which one just made here is.
- *
- * `role="img"` is what carries the label to a reader: a bare span has no role that a name can be
- * given to, and the tooltip alone reaches nobody who is not pointing at it.
+ * Marks a card the filter does not match, drawn because it was just made here.
+ * `role="img"` is what lets `aria-label` name it: a span on its own cannot be named.
  */
 export function OutsideFilterBadge() {
     return (
