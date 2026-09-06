@@ -14,16 +14,19 @@ import { t } from "../services/i18n";
 import { copyImageReferenceToClipboard } from "../services/image";
 import { getHelpUrlForNote } from "../services/in_app_help";
 import LoadResults from "../services/load_results";
+import { sanitizeNoteContentHtml } from "../services/sanitize_content";
 import server from "../services/server";
 import toast from "../services/toast";
 import tree from "../services/tree";
-import { createImageSrcUrl, openInAppHelpFromUrl } from "../services/utils";
+import { createImageSrcUrl, isElectron, openInAppHelpFromUrl } from "../services/utils";
 import { ViewTypeOptions } from "./collections/interface";
 import ActionButton, { ActionButtonProps } from "./react/ActionButton";
 import { ButtonGroup } from "./react/Button";
-import { useIsNoteReadOnly, useNoteLabel, useNoteLabelBoolean, useTriliumEvent, useTriliumOption, useWindowSize } from "./react/hooks";
+import { useEffectiveReadOnly, useIsNoteReadOnly, useNoteLabel, useNoteLabelBoolean, useTriliumEvent, useTriliumOption, useWindowSize } from "./react/hooks";
+import NoItems from "./react/NoItems";
 import NoteLink from "./react/NoteLink";
 import RawHtml from "./react/RawHtml";
+import { isSplitEditorForcedReadOnly, resolveDisplayMode } from "./type_widgets/helpers/split_editor_mode";
 
 export interface FloatingButtonContext {
     parentComponent: Component;
@@ -56,10 +59,11 @@ export const DESKTOP_FLOATING_BUTTONS: FloatingButtonsList = [
     ShowHighlightsListWidgetButton,
     RunActiveNoteButton,
     OpenTriliumApiDocsButton,
+    OpenElectronApiDocsButton,
     SaveToNoteButton,
-    RelationMapButtons,
     CopyImageReferenceButton,
     ExportImageButtons,
+    ExportSpreadsheetButton,
     InAppHelpButton,
     Backlinks
 ];
@@ -110,12 +114,14 @@ function ToggleReadOnlyButton({ note, isDefaultViewMode }: FloatingButtonContext
     />;
 }
 
-function DisplayModeSwitcher({ note, isDefaultViewMode }: FloatingButtonContext) {
+function DisplayModeSwitcher({ note, noteContext, isDefaultViewMode }: FloatingButtonContext) {
     const [ displayMode, setDisplayMode ] = useNoteLabel(note, "displayMode");
-    const isEnabled = (note.isMarkdown() || note.type === "mermaid") && note.isContentAvailable() && isDefaultViewMode;
+    const readOnly = useEffectiveReadOnly(note, noteContext);
+    const isEnabled = (note.isMarkdown() || note.type === "mermaid" || note.isIconPack()) && note.isContentAvailable() && isDefaultViewMode;
     if (!isEnabled) return false;
 
-    const mode = displayMode === "source" || displayMode === "preview" ? displayMode : "split";
+    // Mirror SplitEditor's mode resolution so the active button matches the actual pane.
+    const mode = resolveDisplayMode(displayMode, readOnly || isSplitEditorForcedReadOnly(note));
     const buttons: Array<{ value: "source" | "split" | "preview"; icon: string; text: string }> = [
         { value: "source", icon: "bx bx-code", text: t("display_mode.source") },
         { value: "split", icon: "bx bxs-dock-left", text: t("display_mode.split") },
@@ -214,6 +220,15 @@ function OpenTriliumApiDocsButton({ note }: FloatingButtonContext) {
     />;
 }
 
+function OpenElectronApiDocsButton({ note }: FloatingButtonContext) {
+    const isEnabled = note.mime === "application/javascript;env=frontend" && isElectron();
+    return isEnabled && <FloatingButton
+        icon="bx bx-window-alt"
+        text={t("code_buttons.electron_api_docs_button_title")}
+        onClick={() => openInAppHelpFromUrl("GFXVHyblVN3d")}
+    />;
+}
+
 function SaveToNoteButton({ note }: FloatingButtonContext) {
     const isEnabled = note.mime === "text/x-sqlite;schema=trilium" && note.isHiddenCompletely();
     return isEnabled && <FloatingButton
@@ -234,39 +249,6 @@ export function buildSaveSqlToNoteHandler(note: FNote) {
             await appContext.tabManager.getActiveContext()?.setNote(notePath);
         }
     };
-}
-
-function RelationMapButtons({ note, isDefaultViewMode, triggerEvent }: FloatingButtonContext) {
-    const isEnabled = (note.type === "relationMap" && isDefaultViewMode);
-    return isEnabled && (
-        <>
-            <FloatingButton
-                icon="bx bx-folder-plus"
-                text={t("relation_map_buttons.create_child_note_title")}
-                onClick={() => triggerEvent("relationMapCreateChildNote")}
-            />
-
-            <FloatingButton
-                icon="bx bx-crop"
-                text={t("relation_map_buttons.reset_pan_zoom_title")}
-                onClick={() => triggerEvent("relationMapResetPanZoom")}
-            />
-
-            <div className="btn-group">
-                <FloatingButton
-                    icon="bx bx-zoom-in"
-                    text={t("relation_map_buttons.zoom_in_title")}
-                    onClick={() => triggerEvent("relationMapResetZoomIn")}
-                />
-
-                <FloatingButton
-                    icon="bx bx-zoom-out"
-                    text={t("relation_map_buttons.zoom_out_title")}
-                    onClick={() => triggerEvent("relationMapResetZoomOut")}
-                />
-            </div>
-        </>
-    );
 }
 
 function CopyImageReferenceButton({ note, isDefaultViewMode }: FloatingButtonContext) {
@@ -313,6 +295,24 @@ function ExportImageButtons({ note, triggerEvent, isDefaultViewMode }: FloatingB
                 icon="bx bxs-file-png"
                 text={t("png_export_button.button_title")}
                 onClick={() => triggerEvent("exportPng")}
+            />
+        </>
+    );
+}
+
+function ExportSpreadsheetButton({ note, triggerEvent, isDefaultViewMode }: FloatingButtonContext) {
+    const isEnabled = note?.type === "spreadsheet" && note?.isContentAvailable() && isDefaultViewMode;
+    return isEnabled && (
+        <>
+            <FloatingButton
+                icon="bx bxs-spreadsheet"
+                text={t("spreadsheet.export-xlsx")}
+                onClick={() => triggerEvent("exportXlsx")}
+            />
+            <FloatingButton
+                icon="bx bxs-spreadsheet"
+                text={t("spreadsheet.export-csv")}
+                onClick={() => triggerEvent("exportCsv")}
             />
         </>
     );
@@ -386,7 +386,7 @@ export function useBacklinkCount(note: FNote | null | undefined, isDefaultViewMo
 }
 
 export function BacklinksList({ note }: { note: FNote }) {
-    const [ backlinks, setBacklinks ] = useState<BacklinksResponse>([]);
+    const [ backlinks, setBacklinks ] = useState<BacklinksResponse>();
 
     function refresh() {
         server.get<BacklinksResponse>(`note-map/${note.noteId}/backlinks`).then(async (backlinks) => {
@@ -404,23 +404,57 @@ export function BacklinksList({ note }: { note: FNote }) {
         if (needsRefresh(note, loadResults)) refresh();
     });
 
-    return backlinks.map(backlink => (
-        <li>
+    // Nothing at all until the request has answered, so that the placeholder below doesn't show for
+    // as long as it takes — the note usually has backlinks, this list being what says it has.
+    if (!backlinks) return null;
+
+    if (!backlinks.length) {
+        return (
+            // An item of the list it stands in for: what holds it is a <ul> everywhere but the
+            // floating button's dropdown, which only opens once there is something to list anyway.
+            <li className="backlinks-empty">
+                <NoItems size="small" icon="bx bx-link" text={t("zpetne_odkazy.no_backlinks")} />
+            </li>
+        );
+    }
+
+    // Keyed by position: one source note takes a row per relation it points with, so a note ID names
+    // no single row, and the whole list is rebuilt at once anyway.
+    return backlinks.map((backlink, index) => (
+        <li key={index}>
+            {/* Named so that the styling has something to hang off other than the position of the
+                link within the item (see Backlinks.css). */}
             <NoteLink
                 notePath={backlink.noteId}
+                containerClassName="backlink-header"
                 showNotePath showNoteIcon
                 noPreview
             />
 
             {"relationName" in backlink ? (
-                <p>{backlink.relationName}</p>
+                <p className="backlink-relation">{backlink.relationName}</p>
             ) : (
-                backlink.excerpts.map(excerpt => (
-                    <RawHtml html={excerpt} />
+                backlink.excerpts.map((excerpt, excerptIndex) => (
+                    <RawHtml key={excerptIndex} html={sanitizeNoteContentHtml(excerpt)} />
                 ))
             )}
         </li>
     ));
+}
+
+/**
+ * {@link BacklinksList} in the markup its styling hangs off (see Backlinks.css), for the places that
+ * frame the list rather than build it: the sidebar's card, the mobile note menu's modal, the status
+ * bar's dropdown. The floating button keeps its own container, being a popup it also sizes by hand.
+ */
+export function BacklinksWidget({ note }: { note: FNote }) {
+    return (
+        <div class="tn-backlinks-widget">
+            <ul class="backlinks-items">
+                <BacklinksList note={note} />
+            </ul>
+        </div>
+    );
 }
 
 function needsRefresh(note: FNote, loadResults: LoadResults) {

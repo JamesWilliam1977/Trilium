@@ -4,11 +4,60 @@
  */
 
 /**
- * A chat message in the conversation.
+ * Plain-text segment of a multimodal message.
+ */
+export interface LlmTextPart {
+    type: "text";
+    text: string;
+}
+
+/**
+ * Image segment of a multimodal message. The image is referenced by its
+ * Trilium attachment ID — the server loads the bytes from Becca before
+ * forwarding to the provider, so the wire stays small and we don't store
+ * base64 in chat history.
+ */
+export interface LlmImagePart {
+    type: "image";
+    attachmentId: string;
+    /** IANA media type (e.g. "image/png"). */
+    mime: string;
+}
+
+/**
+ * File segment of a multimodal message (e.g. a PDF). Like image parts, the
+ * file is referenced by its Trilium attachment ID and resolved to bytes
+ * server-side. Provider support varies by MIME type — PDFs (`application/pdf`)
+ * are handled natively by Anthropic, OpenAI, and Google.
+ */
+export interface LlmFilePart {
+    type: "file";
+    attachmentId: string;
+    mime: string;
+    filename: string;
+}
+
+/**
+ * Text-file segment of a multimodal message (e.g. a `.md`, `.json`, source
+ * code). Unlike `LlmFilePart`, the server inlines the decoded UTF-8 content
+ * as a plain `TextPart` so it works with every provider regardless of file
+ * upload support — the trade-off is that large files inflate token usage.
+ */
+export interface LlmTextAttachmentPart {
+    type: "text_attachment";
+    attachmentId: string;
+    filename: string;
+}
+
+export type LlmMessagePart = LlmTextPart | LlmImagePart | LlmFilePart | LlmTextAttachmentPart;
+
+/**
+ * A chat message in the conversation. `content` may be a plain string (the
+ * common case) or an ordered array of parts when the message includes images.
  */
 export interface LlmMessage {
     role: "user" | "assistant" | "system";
-    content: string;
+    content: string | LlmMessagePart[];
 }
 
 /**
@@ -28,7 +77,14 @@ export interface LlmCitation {
  * Configuration for LLM chat requests.
  */
 export interface LlmChatConfig {
+    /** Provider type (e.g. "anthropic"). Kept for chats saved before {@link providerId} existed. */
     provider?: string;
+    /**
+     * ID of the provider configuration to route through. Preferred over
+     * {@link provider} — it disambiguates multiple configs of the same type
+     * (e.g. a real OpenAI key plus a self-hosted Ollama endpoint).
+     */
+    providerId?: string;
     model?: string;
     systemPrompt?: string;
     /** Enable web search tool */
@@ -65,16 +121,22 @@ export interface LlmModelInfo {
     name: string;
     /** Provider type that owns this model (e.g., "anthropic", "openai") */
     provider?: string;
-    /** Pricing per million tokens */
-    pricing: LlmModelPricing;
+    /** ID of the provider configuration this model was listed from */
+    providerId?: string;
+    /** User-given name of the provider configuration (e.g. "My Ollama") */
+    providerName?: string;
+    /** Pricing per million tokens. Absent for dynamically discovered models with unknown pricing. */
+    pricing?: LlmModelPricing;
     /** Whether this is the default model */
     isDefault?: boolean;
     /** Whether this is a legacy/older model */
     isLegacy?: boolean;
-    /** Cost multiplier relative to the cheapest model (1x = cheapest) */
-    costMultiplier?: number;
+    /** Whether this model is pre-selected by default when adding a provider (e.g. excludes legacy and, for Gemini, preview models) */
+    recommended?: boolean;
     /** Maximum context window size in tokens */
     contextWindow?: number;
+    /** Whether usage is covered by a subscription plan rather than metered per token */
+    isSubscription?: boolean;
 }
 
 /**
@@ -88,6 +150,32 @@ export interface LlmUsage {
     cost?: number;
     /** Model identifier used for this response */
     model?: string;
+    /**
+     * Provider *type* that served the response ("anthropic", "deepseek", …), not the id of a
+     * particular configuration. Recorded alongside the model so the client can abbreviate the
+     * name for display: which vendor word is safe to drop depends on the vendor. The full
+     * name is what gets stored — shortening is applied at render time only.
+     */
+    provider?: string;
+}
+
+/**
+ * Machine-readable context for a failed provider call, carried alongside the
+ * human-readable error message of an `error` chunk.
+ *
+ * Kept as separate fields rather than pre-formatted into the message so the client
+ * can title the failure ("API error (HTTP 400)"), collapse the noisy parts behind a
+ * "show details" toggle, and drop a response body that only repeats the message.
+ * Absent for failures that never reached a provider (connection errors, aborted
+ * streams) and for chats saved before this field existed.
+ */
+export interface LlmErrorDetails {
+    /** HTTP status returned by the provider. */
+    statusCode?: number;
+    /** Endpoint the failed request was sent to. */
+    url?: string;
+    /** Raw response body, truncated by the server to a display-safe length. */
+    responseBody?: string;
 }
 
 /**
@@ -97,9 +185,11 @@ export interface LlmUsage {
 export type LlmStreamChunk =
     | { type: "text"; content: string }
     | { type: "thinking"; content: string }
-    | { type: "tool_use"; toolName: string; toolInput: Record<string, unknown> }
-    | { type: "tool_result"; toolName: string; result: string; isError?: boolean }
+    | { type: "tool_input_start"; toolCallId: string; toolName: string }
+    | { type: "tool_input_delta"; toolCallId: string; delta: string }
+    | { type: "tool_use"; toolCallId: string; toolName: string; toolInput: Record<string, unknown> }
+    | { type: "tool_result"; toolCallId: string; toolName: string; result: string; isError?: boolean }
     | { type: "citation"; citation: LlmCitation }
     | { type: "usage"; usage: LlmUsage }
-    | { type: "error"; error: string }
+    | { type: "error"; error: string; errorDetails?: LlmErrorDetails }
     | { type: "done" };

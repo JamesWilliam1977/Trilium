@@ -27,8 +27,11 @@ class ZoomComponent extends Component {
 
     setZoomFactor(zoomFactor: string | number) {
         const parsedZoomFactor = typeof zoomFactor !== "number" ? parseFloat(zoomFactor) : zoomFactor;
-        const webFrame = utils.dynamicRequire("electron").webFrame;
-        webFrame.setZoomFactor(parsedZoomFactor);
+        window.electronApi?.window.setZoomFactor(parsedZoomFactor);
+
+        // The native window buttons are laid out in device-independent pixels, so they stay put
+        // while the rest of the chrome scales; re-push the theme's geometry at the new zoom.
+        void import("../services/native_window.js").then(({ syncNativeWindowWithTheme }) => syncNativeWindowWithTheme());
     }
 
     async setZoomFactorAndSave(zoomFactor: number) {
@@ -44,7 +47,7 @@ class ZoomComponent extends Component {
     }
 
     getCurrentZoom() {
-        return utils.dynamicRequire("electron").webFrame.getZoomFactor();
+        return window.electronApi?.window.getZoomFactor() ?? 1.0;
     }
 
     zoomOutEvent() {

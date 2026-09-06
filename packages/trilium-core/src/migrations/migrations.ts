@@ -3,9 +3,23 @@
  *
  * Contains all the migrations that are run on the database.
  */
+export function getMaxMigrationVersion() {
+    return MIGRATIONS[0].version;
+}
 
 // Migrations should be kept in descending order, so the latest migration is first.
-const MIGRATIONS: (SqlMigration | JsMigration)[] = [
+export const MIGRATIONS: (SqlMigration | JsMigration)[] = [
+    // Give every board its own select definition for the label it groups by, so the columns stop
+    // living only in the board.json attachment
+    {
+        version: 240,
+        module: () => import("./0240__migrate_board_status_to_select.js")
+    },
+    // Turn TOTP back off for installs that had disabled MFA before the enable flag was removed
+    {
+        version: 239,
+        module: () => import("./0239__disable_totp_when_mfa_was_turned_off.js")
+    },
     // Add description column to revisions table for manual revision comments
     {
         version: 238,
@@ -350,10 +364,6 @@ const MIGRATIONS: (SqlMigration | JsMigration)[] = [
         `
     }
 ];
-
-export default MIGRATIONS;
-
-export const MAX_MIGRATION_VERSION = MIGRATIONS[0].version;
 
 interface Migration {
     version: number;

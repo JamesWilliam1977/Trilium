@@ -7,7 +7,7 @@ import type serveStatic from "serve-static";
 import { assetUrlFragment } from "../services/asset_path.js";
 import auth from "../services/auth.js";
 import port from "../services/port.js";
-import { getResourceDir, isDev } from "../services/utils.js";
+import { getResourceDir, isDev, isElectron } from "../services/utils.js";
 import { doubleCsrfProtection as csrfMiddleware } from "./csrf_protection.js";
 
 // Allow serving assets even if the installation path contains a hidden (dot-prefixed) directory.
@@ -38,16 +38,29 @@ async function register(app: express.Application) {
         const vite = await createViteServer({
             server: {
                 middlewareMode: true,
-                hmr: {
+                ws: {
                     // Derive a unique HMR port from the application port so
                     // multiple dev instances (e.g. server on 8080, desktop on
                     // 37742) don't all fight over Vite's default port 24678.
-                    port: port + 10
+                    port: port + 10,
+                    // Under Electron the page loads from `trilium-app://app/`,
+                    // so Vite's default of using `window.location.hostname`
+                    // would try `ws://app:…` — DNS fails. Pin the HMR client
+                    // to loopback explicitly.
+                    ...(isElectron ? { host: "127.0.0.1", protocol: "ws" as const } : {})
                 }
             },
             appType: "spa",
             configFile: path.join(clientDir, "vite.config.mts"),
-            base: `/${assetUrlFragment}/`
+            base: `/${assetUrlFragment}/`,
+            // One dep-optimizer cache per dev instance. The client config points
+            // `cacheDir` at a single repo-level directory, but the optimizer
+            // invalidates the whole cache whenever its `configHash` changes —
+            // and that hash differs between the Node-hosted dev server and the
+            // Electron-hosted one. Sharing the directory therefore made every
+            // switch between `server:start` and `desktop:start` re-scan and
+            // re-bundle the whole dependency graph, adding ~3s to startup.
+            cacheDir: path.join(clientDir, "../..", ".cache", `vite-${port}`)
         });
         app.use(`/${assetUrlFragment}/`, (req, res, next) => {
             if (req.url.startsWith("/images/") || req.url.startsWith("/doc_notes/")) {
@@ -93,9 +106,13 @@ async function register(app: express.Application) {
     app.use(`/pdfjs/`, persistentCacheStatic(getPdfjsAssetDir()));
     app.use(`/${assetUrlFragment}/images`, persistentCacheStatic(path.join(resourceDir, "assets", "images")));
     app.use(`/${assetUrlFragment}/doc_notes`, persistentCacheStatic(path.join(resourceDir, "assets", "doc_notes")));
-    app.use(`/assets/vX/fonts`, express.static(path.join(srcRoot, "public/fonts"), STATIC_OPTIONS));
-    app.use(`/assets/vX/images`, express.static(path.join(srcRoot, "..", "images"), STATIC_OPTIONS));
-    app.use(`/assets/vX/stylesheets`, express.static(path.join(srcRoot, "public/stylesheets"), STATIC_OPTIONS));
+    // `vX` is a version-independent alias so custom themes and scripts can reference built-in assets
+    // without naming a version they would have to bump on every upgrade. It serves the same files as
+    // the versioned routes above, but without `maxAge`: the URL no longer changes between releases,
+    // so a long-lived cache entry would pin the client to the previous version's assets.
+    app.use(`/assets/vX/stylesheets`, express.static(path.join(getClientDir(), "stylesheets"), STATIC_OPTIONS));
+    app.use(`/assets/vX/fonts`, express.static(path.join(getClientDir(), "fonts"), STATIC_OPTIONS));
+    app.use(`/assets/vX/images`, express.static(path.join(resourceDir, "assets", "images"), STATIC_OPTIONS));
 }
 
 export function getShareThemeAssetDir() {
