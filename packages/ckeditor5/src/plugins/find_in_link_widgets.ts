@@ -1,3 +1,5 @@
+import "../theme/find_in_link_widgets.css";
+
 import {
     _sortFindResultsByMarkerPositions as sortFindResults,
     Collection,

@@ -96,14 +96,19 @@ describe("FindInLinkWidgets", () => {
     });
 
     it("highlights the matching characters of an anchor widget that a theme styles", () => {
-        // The first two rules mirror CKEditor's find-and-replace theme; the last mirrors an
-        // application theme that gives every link its own background.
+        // The first three rules mirror CKEditor's find-and-replace theme; the last mirrors an
+        // application theme that gives every link its own background and color.
         const themeStyle = document.createElement("style");
         themeStyle.textContent =
-            ":root { --ck-color-highlight-background: rgb(255, 255, 0); }" +
-            ".ck-find-result { background: var(--ck-color-highlight-background); }" +
+            ":root {" +
+            "  --ck-color-highlight-background: rgb(255, 255, 0);" +
+            "  --ck-color-text: rgb(0, 0, 0);" +
+            "}" +
+            ".ck-find-result {" +
+            "  background: var(--ck-color-highlight-background); color: var(--ck-color-text);" +
+            "}" +
             ".ck-find-result_selected { background: rgb(255, 150, 51); }" +
-            ".ck-content a { background: transparent; }";
+            ".ck-content a { background: transparent; color: rgb(0, 0, 255); }";
         document.head.append(themeStyle);
         try {
             setModelData(
@@ -120,6 +125,7 @@ describe("FindInLinkWidgets", () => {
             expect(match.textContent).toBe("match");
             expect(getComputedStyle(reference).backgroundColor).toBe("rgba(0, 0, 0, 0)");
             expect(getComputedStyle(match).backgroundColor).toBe("rgb(255, 255, 0)");
+            expect(getComputedStyle(match).color).toBe("rgb(0, 0, 0)");
 
             editor.execute("findNext");
             const selected = reference.querySelector(".ck-find-result_selected");
@@ -128,6 +134,8 @@ describe("FindInLinkWidgets", () => {
             }
             expect(selected.textContent).toBe("match");
             expect(getComputedStyle(selected).backgroundColor).toBe("rgb(255, 150, 51)");
+            // Not the link color the theme sets on the surrounding anchor.
+            expect(getComputedStyle(selected).color).toBe("rgb(0, 0, 0)");
         } finally {
             themeStyle.remove();
         }
