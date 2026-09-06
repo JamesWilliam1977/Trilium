@@ -93,6 +93,37 @@ describe("FindInLinkWidgets", () => {
         expect(selectedReference).not.toBeNull();
     });
 
+    it("keeps the highlight visible on anchor widgets that a theme styles", () => {
+        // The first two rules mirror CKEditor's find-and-replace theme; the last mirrors an
+        // application theme that gives every link its own background.
+        const themeStyle = document.createElement("style");
+        themeStyle.textContent =
+            ":root { --ck-color-highlight-background: rgb(255, 255, 0); }" +
+            ".ck-find-result { background: var(--ck-color-highlight-background); }" +
+            ".ck-content a { background: transparent; }";
+        document.head.append(themeStyle);
+        try {
+            setModelData(
+                editor.model,
+                '<paragraph>match <reference href="#root/ref"></reference></paragraph>'
+            );
+            editor.execute("find", "match");
+
+            const reference = editor.editing.view.getDomRoot()?.querySelector("a.reference-link");
+            if (!reference) {
+                throw new Error("The test editor did not render the reference link.");
+            }
+            expect(reference.classList.contains("ck-find-result")).toBe(true);
+            expect(getComputedStyle(reference).backgroundColor).toBe("rgb(255, 255, 0)");
+
+            editor.execute("findNext");
+            expect(reference.classList.contains("ck-find-result_selected")).toBe(true);
+            expect(getComputedStyle(reference).backgroundColor).toBe("rgb(255, 150, 51)");
+        } finally {
+            themeStyle.remove();
+        }
+    });
+
     it("matches only the text that each link widget displays", () => {
         setModelData(
             editor.model,
