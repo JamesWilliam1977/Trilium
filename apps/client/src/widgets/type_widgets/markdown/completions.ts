@@ -41,9 +41,7 @@ export function useSlashCommands(parentComponent: TypeWidgetProps["parentCompone
     useEffect(() => {
         if (!editorView) return;
 
-        // CodeMirror allows one `override` config per editor, so sources go through
-        // `setCompletionSource` instead of each adding its own `autocompletion()`.
-        editorView.setCompletionSource("slashCommands", (ctx) => {
+        const slashCommands = (ctx: CompletionContext): CompletionResult | null => {
             // `:` and `-` are allowed so `/todo:<state>` (e.g. `/todo:in-progress`) matches as one token.
             const match = ctx.matchBefore(SLASH_COMMAND_REGEX);
             if (!match) return null;
@@ -241,8 +239,14 @@ export function useSlashCommands(parentComponent: TypeWidgetProps["parentCompone
                     ...buildSnippetCompletions(snippetsRef.current.filter((snippet) => snippet.noteId !== noteRef.current.noteId))
                 ]
             };
-        });
-        editorView.setCompletionSource("markdownCodeFence", codeFenceCompletionSource);
+        };
+
+        // CodeMirror allows one `override` config per editor, so sources go through
+        // `setCompletionSource` instead of each adding its own `autocompletion()`.
+        // Bridges the codemirror package's own @codemirror/autocomplete identity, as code/snippets.ts does.
+        type CmCompletionSource = Parameters<VanillaCodeMirror["setCompletionSource"]>[1];
+        editorView.setCompletionSource("slashCommands", slashCommands as unknown as CmCompletionSource);
+        editorView.setCompletionSource("markdownCodeFence", codeFenceCompletionSource as unknown as CmCompletionSource);
 
         return () => {
             editorView.setCompletionSource("slashCommands", null);
