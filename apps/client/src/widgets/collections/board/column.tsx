@@ -153,7 +153,18 @@ export default function Column({
     // Cards slide to follow the drop gap opening and closing. No card opens out of nothing: one
     // made in the footer is shown by the scroll to the end and by its fade, and one made among the
     // others takes the place its field was standing in.
-    useFlip(contentRef, { selector: ".board-note" });
+    //
+    // While a card is carried, only the column it came from and the ones the gap can reach next
+    // measure their cards: every column redraws on every step of the gesture, and measuring one
+    // forces a layout of the whole board. The neighbours are included because the gap crosses to
+    // an adjacent column, and a column measured only once the gap is already in it has no earlier
+    // places to slide its cards from.
+    const dropColumnIndex = dropPosition ? columns.indexOf(dropPosition.column) : -1;
+    useFlip(contentRef, {
+        selector: ".board-note",
+        disabled: !!draggedCard && column !== draggedCard.fromColumn
+            && !(dropColumnIndex >= 0 && Math.abs(columnIndex - dropColumnIndex) <= 1)
+    });
     const { handleDragOver, handleDragLeave, handleDrop } = useDragging({
         column, columnIndex, columnItems, isEditing, api, parentNote
     });

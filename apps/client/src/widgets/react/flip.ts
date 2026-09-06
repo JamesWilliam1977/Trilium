@@ -25,7 +25,7 @@ export interface FlipOptions {
      * full size. A predicate decides per child, for arrivals already shown some other way.
      */
     grow?: boolean | ((child: HTMLElement) => boolean);
-    /** Whether to leave the children where the browser puts them. */
+    /** Whether to leave the children where the browser puts them, and stop measuring them. */
     disabled?: boolean;
 }
 
@@ -76,6 +76,16 @@ export function useFlip(
             return;
         }
 
+        // Measured only when a slide can come of it: reading one position forces a layout of the
+        // whole document, which on a list of thousands is what this hook costs. The remembered
+        // places are dropped with it, since the children can move while they are not being
+        // followed and a stale place slides a child that never went anywhere.
+        if (disabled) {
+            seen.current.clear();
+            drawn.current = false;
+            return;
+        }
+
         const before = seen.current;
         const now = read();
         const moved: { child: HTMLElement, by: number }[] = [];
@@ -87,7 +97,7 @@ export function useFlip(
             const child = element as HTMLElement;
             const previous = before.get(child);
 
-            if (disabled || place.at === null) {
+            if (place.at === null) {
                 continue;
             }
 
