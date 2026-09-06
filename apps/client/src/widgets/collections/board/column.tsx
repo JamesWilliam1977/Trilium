@@ -35,6 +35,7 @@ import CardTemplatePill from "./card_template_pill";
 import { type CardTemplates } from "./card_templates";
 import { DEFAULT_CARD_ICON, DEFAULT_COLUMN_ICON, INBOX_COLUMN } from "./columns";
 import { openColumnContextMenu, openCreateCardMenu } from "./context_menu";
+import { BoardDropStateContext, useDropIndex, useIsDropTarget } from "./drop_state";
 
 interface DragContext {
     column: string;
@@ -144,7 +145,11 @@ export default function Column({
     const [ isRevealed, setIsRevealed ] = useState(false);
     const { setColumnNameToEdit, setColumnLimitToEdit, setActiveColumn } =
         useContext(BoardActionsContext);
-    const { branchIdToEdit, columnNameToEdit, dropTarget, draggedCard, dropPosition } = useContext(BoardDragStateContext);
+    const { branchIdToEdit, columnNameToEdit, draggedCard } = useContext(BoardDragStateContext);
+    // Asked about this column alone: where the gap stands changes on every step of a drag, and a
+    // column that the answer does not concern is left as it is rather than drawn again.
+    const dropIndex = useDropIndex(column);
+    const isDropTarget = useIsDropTarget(column);
     const isEditing = (columnNameToEdit === column);
     const editorRef = useRef<HTMLInputElement>(null);
     const headerRef = useRef<HTMLHeadingElement>(null);
@@ -153,7 +158,21 @@ export default function Column({
     // Cards slide to follow the drop gap opening and closing. No card opens out of nothing: one
     // made in the footer is shown by the scroll to the end and by its fade, and one made among the
     // others takes the place its field was standing in.
-    useFlip(contentRef, { selector: ".board-note" });
+    //
+    // While a card is carried, the cards that move are those of the column it came from and those
+    // of any column the gap has stood in. The rest are left unmeasured, measuring one costing a
+    // layout of the whole board; paused rather than switched off, so a column the gap reaches in
+    // one step still knows where its cards stood and slides them from there.
+    const heldGap = useRef(false);
+    if (!draggedCard) {
+        heldGap.current = false;
+    } else if (dropIndex !== null) {
+        heldGap.current = true;
+    }
+    useFlip(contentRef, {
+        selector: ".board-note",
+        paused: !!draggedCard && column !== draggedCard.fromColumn && !heldGap.current
+    });
     const { handleDragOver, handleDragLeave, handleDrop } = useDragging({
         column, columnIndex, columnItems, isEditing, api, parentNote
     });
@@ -169,7 +188,7 @@ export default function Column({
     const isOverLimit = limit !== undefined && (totalCount ?? columnItems?.length ?? 0) > limit;
     const isCollapsed = !!collapsed && !isActive && !isPeeked;
     // A column opened to take a dragged card takes its width at once, and its cards with it.
-    const opensAtOnce = !!draggedCard || dropTarget === column;
+    const opensAtOnce = !!draggedCard || isDropTarget;
 
     /**
      * Whether the column is still widening, during which its cards are left unpainted.
@@ -368,7 +387,7 @@ export default function Column({
         <div
             data-column={column}
             className={clsx("board-column", {
-                "drag-over": dropTarget === column && draggedCard?.fromColumn !== column,
+                "drag-over": isDropTarget && draggedCard?.fromColumn !== column,
                 // The class the themes key a hue off, worn here as anywhere else that carries one.
                 "with-hue": hue !== undefined,
                 "board-column-archived": archived,
@@ -496,8 +515,7 @@ export default function Column({
                     // The card being carried is out of the flow, so the gap stands in its own
                     // place too: held still, which a touch does before it moves, that is where it
                     // was picked up from.
-                    const showIndicatorBefore = dropPosition?.column === column &&
-                                            dropPosition.index === index;
+                    const showIndicatorBefore = dropIndex === index;
 
                     return (
                         <Fragment key={note.noteId}>
@@ -523,7 +541,7 @@ export default function Column({
                     );
                 })}
                 {insertBefore && !insertBefore.branchId && insertField}
-                {dropPosition?.column === column && dropPosition.index === (columnItems?.length ?? 0) && (
+                {dropIndex === (columnItems?.length ?? 0) && (
                     <div className="board-drop-placeholder show" style={gapStyle} />
                 )}
             </div>}
@@ -719,7 +737,10 @@ ${warning}` : counts}
 function useDragging({ column, columnIndex, columnItems, isEditing, api, parentNote }: DragContext & { isEditing: boolean, api: BoardApi, parentNote: FNote }) {
     const { setDraggedColumn, setDropTarget, setDropPosition, setActiveColumn } =
         useContext(BoardActionsContext);
-    const { draggedColumn, dropPosition } = useContext(BoardDragStateContext);
+    const { draggedColumn } = useContext(BoardDragStateContext);
+    // Read when a drop happens rather than watched: these callbacks answer for a drag from the
+    // note tree, and where the gap stands is of no interest to the column until one lands.
+    const dropState = useContext(BoardDropStateContext);
     /** Needed to track if current column is dragged in real-time, since {@link draggedColumn} is populated one render cycle later.  */
     const isDraggingRef = useRef(false);
 
@@ -773,10 +794,11 @@ function useDragging({ column, columnIndex, columnItems, isEditing, api, parentN
             }
         }
 
-        if (!(dropPosition?.column === column && dropPosition.index === newIndex)) {
+        const standing = dropState.get().position;
+        if (!(standing?.column === column && standing.index === newIndex)) {
             setDropPosition({ column, index: newIndex });
         }
-    }, [column, setDropTarget, setActiveColumn, dropPosition, setDropPosition, isEditing]);
+    }, [column, setDropTarget, setActiveColumn, dropState, setDropPosition, isEditing]);
 
     const handleDragLeave = useCallback((e: DragEvent) => {
         const relatedTarget = e.relatedTarget as HTMLElement;
@@ -791,6 +813,8 @@ function useDragging({ column, columnIndex, columnItems, isEditing, api, parentN
     const handleDrop = useCallback(async (e: DragEvent) => {
         if (draggedColumn) return; // Don't handle card drops when dragging columns
         e.preventDefault();
+        // Taken before the gap is closed, which is what says where the note goes.
+        const standing = dropState.get().position;
         setDropTarget(null);
         setDropPosition(null);
 
@@ -808,9 +832,9 @@ function useDragging({ column, columnIndex, columnItems, isEditing, api, parentN
             const { noteId, branchId } = dropped[0];
             const targetNote = await froca.getNote(noteId, true);
             const parentNoteId = parentNote.noteId;
-            if (!dropPosition) return;
+            if (!standing) return;
 
-            const targetIndex = dropPosition.index - 1;
+            const targetIndex = standing.index - 1;
             const targetItems = columnItems || [];
             const targetBranch = targetIndex >= 0 ? targetItems[targetIndex].branch : null;
 
@@ -828,7 +852,7 @@ function useDragging({ column, columnIndex, columnItems, isEditing, api, parentN
                 await branches.moveAfterBranch([ branchId ], targetBranch.branchId);
             }
         }
-    }, [ api, draggedColumn, dropPosition, columnItems, column, setDropTarget, setDropPosition ]);
+    }, [ api, draggedColumn, dropState, columnItems, column, setDropTarget, setDropPosition ]);
 
     return { handleColumnDragStart, handleColumnDragEnd, handleDragOver, handleDragLeave, handleDrop };
 }
