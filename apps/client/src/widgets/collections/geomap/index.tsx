@@ -502,7 +502,7 @@ function useLayerData(note: FNote) {
         if ("styleDark" in layerData) {
             return {
                 ...layerData,
-                style: isSystemDark ? layerData.styleDark : layerData.styleLight,
+                style: isSystemDark ? (layerData.styleDark ?? layerData.style) : layerData.style,
                 isDarkTheme: isSystemDark
             } satisfies MapLayer;
         }

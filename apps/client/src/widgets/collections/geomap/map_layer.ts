@@ -9,10 +9,10 @@ export type MapLayer = ({
      * had on the day it was taken.
      */
     style: string;
-} | {
-    type: "vector",
-    styleLight: string;
-    styleDark: string;
+    /**
+     * If present, makes the theme light/dark mode aware.
+     */
+    styleDark?: string;
 } | {
     type: "raster";
     url: string;
@@ -55,7 +55,7 @@ export const MAP_LAYERS: Record<string, MapLayer> = {
     "versatile-colorful-eclipse": {
         name: "VersaTiles Colorful/Eclipse",
         type: "vector",
-        styleLight: versatilesStyle("colorful"),
+        style: versatilesStyle("colorful"),
         styleDark: versatilesStyle("eclipse")
     },
     "versatiles-graybeard": {
@@ -72,7 +72,7 @@ export const MAP_LAYERS: Record<string, MapLayer> = {
     "versatile-graybeard-shadow": {
         name: "VersaTiles Graybeard/Shadow",
         type: "vector",
-        styleLight: versatilesStyle("graybeard"),
+        style: versatilesStyle("graybeard"),
         styleDark: versatilesStyle("shadow")
     },
     "versatiles-neutrino": {
