@@ -11,7 +11,7 @@ import server from "../../../services/server";
 import toast from "../../../services/toast";
 import { logError } from "../../../services/ws";
 import CollectionProperties from "../../note_bars/CollectionProperties";
-import { useCollectionTreeDrag, useEffectiveReadOnly, useNoteBlob, useNoteContext, useNoteLabel, useNoteLabelBoolean, useNoteProperty, useSpacedUpdate } from "../../react/hooks";
+import { useCollectionTreeDrag, useColorScheme, useEffectiveReadOnly, useNoteBlob, useNoteContext, useNoteLabel, useNoteLabelBoolean, useNoteProperty, useSpacedUpdate } from "../../react/hooks";
 import { ViewModeProps } from "../interface";
 import { createNewNote, createNoteForPlace, importGpxTrack, moveMarker } from "./api";
 import Buildings from "./Buildings";
@@ -460,6 +460,7 @@ function useLayerData(note: FNote) {
     // Markers). Only the style itself can say, and a style named by URL says nothing to us: it is
     // fetched by the map, and its tiles are pictures besides. So the note is asked instead.
     const [ isDarkStyle ] = useNoteLabelBoolean(note, "map:darkStyle");
+    const isSystemDark = useColorScheme() === "dark";
     // Memo is needed because it would generate unnecessary reloads due to layer change.
     const layerData = useMemo(() => {
         // Custom layers.
@@ -477,8 +478,18 @@ function useLayerData(note: FNote) {
         // that setting it does something wherever it is set; it can only ever say that a style is
         // dark, never that it is light, so a built-in dark style keeps its own answer either way.
         const layerData = MAP_LAYERS[layerName ?? ""] ?? MAP_LAYERS[DEFAULT_MAP_LAYER_NAME];
+
+        // Automatic dark/light style switching based on the system color scheme.
+        if ("styleDark" in layerData) {
+            return {
+                ...layerData,
+                style: isSystemDark ? layerData.styleDark : layerData.styleLight,
+                isDarkTheme: isSystemDark
+            } satisfies MapLayer;
+        }
+
         return isDarkStyle ? { ...layerData, isDarkTheme: true } : layerData;
-    }, [ layerName, isDarkStyle ]);
+    }, [ layerName, isDarkStyle, isSystemDark ]);
 
     return layerData;
 }
