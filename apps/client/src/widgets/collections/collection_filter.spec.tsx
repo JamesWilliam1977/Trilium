@@ -435,10 +435,9 @@ describe("CollectionFilterInput", () => {
         expect(filter.setQuery).toHaveBeenCalledWith("#done");
     });
 
-    it("puts the clear button before the search button", async () => {
-        const { input } = mountInput();
+    it("puts the clear button before the search button", () => {
+        mountInput({ query: "#done" });
 
-        await act(async () => type(input, "#done"));
         const buttons = [ ...container.querySelectorAll("button") ].map(button => button.className);
         const clear = buttons.findIndex(name => name.includes("collection-filter-clear"));
         const submit = buttons.findIndex(name => name.includes("collection-filter-submit"));
@@ -457,16 +456,22 @@ describe("CollectionFilterInput", () => {
         expect(filter.setQuery).toHaveBeenCalledWith("");
     });
 
-    it("shows the box as active and offers no clear button while empty and inactive", () => {
-        mountInput();
-        expect(container.querySelector(".collection-filter")?.classList.contains("active")).toBe(false);
+    it("offers no clear button until a filter is in force, whatever is typed", async () => {
+        const { input } = mountInput();
+        const box = () => container.querySelector(".collection-filter");
+        expect(box()?.classList.contains("active")).toBe(false);
+        expect(container.querySelector(".collection-filter-clear")).toBeNull();
+
+        // Typing is not yet a filter, so there is nothing for the button to take away.
+        await act(async () => type(input, "#done"));
         expect(container.querySelector(".collection-filter-clear")).toBeNull();
 
         mountInput({ query: "#done" });
-        expect(container.querySelector(".collection-filter")?.classList.contains("active")).toBe(true);
+        expect(box()?.classList.contains("active")).toBe(true);
+        expect(container.querySelector(".collection-filter-clear")).not.toBeNull();
     });
 
-    // The tooltip opens on hover alone, so the name has to be on the element itself.
+    // The box carries no tooltip, and a placeholder is gone as soon as something is typed.
     it("names the box for assistive technology", () => {
         const { input } = mountInput();
         expect(input.getAttribute("aria-label")).toBe("collection_filter.placeholder");

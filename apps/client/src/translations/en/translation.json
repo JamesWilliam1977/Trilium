@@ -4197,7 +4197,6 @@
   },
   "collection_filter": {
     "placeholder": "Filter...",
-    "tooltip": "Narrows the collection to the notes matching a search query. Press Enter or the search button to apply; clear the box to show everything again.",
     "clear": "Clear the filter",
     "fetch-error": "The filter could not be run.",
     "submit": "Apply the filter"

@@ -1,7 +1,6 @@
 import "./collection_filter.css";
 
 import type { HighlightedTokenInfo } from "@triliumnext/commons";
-import type { Tooltip } from "bootstrap";
 import clsx from "clsx";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 
@@ -11,19 +10,10 @@ import type LoadResults from "../../services/load_results";
 import searchService from "../../services/search";
 import ActionButton from "../react/ActionButton";
 import FormTextBox from "../react/FormTextBox";
-import { useStaticTooltip, useTriliumEvent } from "../react/hooks";
+import { useTriliumEvent } from "../react/hooks";
 
 /** How long to wait after a change before re-running the active filter. */
 const RERUN_DEBOUNCE_MS = 300;
-
-// Hover only: the box is typed into, and a tooltip opened by the focus would sit over the header
-// for as long as the query is being written.
-const TOOLTIP_CONFIG: Partial<Tooltip.Options> = {
-    title: t("collection_filter.tooltip"),
-    placement: "bottom",
-    trigger: "hover",
-    animation: false
-};
 
 export interface CollectionFilter {
     /** The submitted query, empty while no filter is active. */
@@ -194,7 +184,8 @@ export function useCollectionFilter(note: FNote, {
 
 /**
  * The filter box for a collection header. Enter or the search button submits what is typed, which
- * is held here until then so an unrelated redraw cannot apply a half-typed query.
+ * is held here until then so an unrelated redraw cannot apply a half-typed query. The clear button
+ * stands only while a filter is in force, since that is what it takes away.
  */
 export function CollectionFilterInput({ filter, placeholder }: {
     filter: CollectionFilter;
@@ -203,7 +194,6 @@ export function CollectionFilterInput({ filter, placeholder }: {
 }) {
     const [ typed, setTyped ] = useState(filter.query);
     const inputRef = useRef<HTMLInputElement>(null);
-    useStaticTooltip(inputRef, TOOLTIP_CONFIG);
 
     // Adopt a query submitted elsewhere, or the stored one arriving on mount.
     useEffect(() => setTyped(filter.query), [ filter.query ]);
@@ -216,8 +206,7 @@ export function CollectionFilterInput({ filter, placeholder }: {
                 inputRef={inputRef}
                 currentValue={typed}
                 placeholder={placeholder ?? t("collection_filter.placeholder")}
-                // The tooltip opens on hover alone, so it cannot carry the name to a reader who
-                // arrives by keyboard.
+                // A placeholder names the box only until something is typed into it.
                 aria-label={placeholder ?? t("collection_filter.placeholder")}
                 onChange={setTyped}
                 onKeyDown={(e: KeyboardEvent) => {
@@ -233,7 +222,7 @@ export function CollectionFilterInput({ filter, placeholder }: {
                 }}
             />
             <div className="collection-filter-buttons">
-                {(!!typed || isActive) && (
+                {isActive && (
                     <ActionButton
                         className="collection-filter-clear"
                         noIconActionClass
