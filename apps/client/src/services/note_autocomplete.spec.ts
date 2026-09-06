@@ -280,16 +280,15 @@ describe("autocompleteSource (via dataset)", () => {
         expect(server.get).not.toHaveBeenCalled();
     });
 
-    it("prepends create-note and create-child-note suggestions when allowCreatingNotes and term is non-empty", async () => {
+    it("keeps the create-note row above the results and the create-child-note row below them", async () => {
         server.get = vi.fn(async () => [{ noteTitle: "Existing", notePath: "root/y" }]) as typeof server.get;
-        const { dataset } = initAndGetSource({ allowCreatingNotes: true });
+        const { dataset } = initAndGetSource({ allowCreatingNotes: true, allowJumpToSearchNotes: true });
         const rows = await runSource(dataset, "New");
-        expect(rows[0].action).toBe("create-note");
+        expect(rows.map((r) => r.action)).toEqual([ "create-note", undefined, "create-child-note", "search-notes" ]);
         // the inbox is resolved on selection, so the row carries no parent
         expect(rows[0].parentNoteId).toBeUndefined();
-        expect(rows[1].action).toBe("create-child-note");
-        expect(rows[1].parentNoteId).toBe("activeNote");
-        expect(rows[2].noteTitle).toBe("Existing");
+        expect(rows[1].noteTitle).toBe("Existing");
+        expect(rows[2].parentNoteId).toBe("activeNote");
     });
 
     it("uses root as the child-note parent when there is no active note", async () => {
@@ -297,7 +296,8 @@ describe("autocompleteSource (via dataset)", () => {
         server.get = vi.fn(async () => []) as typeof server.get;
         const { dataset } = initAndGetSource({ allowCreatingNotes: true });
         const rows = await runSource(dataset, "New");
-        expect(rows[1].parentNoteId).toBe("root");
+        const childRow = rows.find((r) => r.action === "create-child-note");
+        expect(childRow?.parentNoteId).toBe("root");
     });
 
     it("appends a search-notes suggestion when allowJumpToSearchNotes", async () => {
@@ -367,7 +367,7 @@ describe("autocompleteSource (via dataset)", () => {
         expect(dataset.templates.suggestion({ action: "create-note", highlightedNotePathTitle: "C" }))
             .toContain("bx bx-plus");
         expect(dataset.templates.suggestion({ action: "create-child-note", highlightedNotePathTitle: "C" }))
-            .toContain("bx bx-plus");
+            .toContain("bx bx-subdirectory-right");
         expect(dataset.templates.suggestion({ action: "external-link", highlightedNotePathTitle: "E" }))
             .toContain("bx bx-link-external");
     });

@@ -305,8 +305,10 @@ export async function buildConfig(opts: BuildEditorOptions): Promise<EditorConfi
                         const iconElement = document.createElement("span");
                         // Choose appropriate icon based on action
                         let iconClass = suggestion.icon ?? "bx bx-note";
-                        if (suggestion.action === "create-note" || suggestion.action === "create-child-note") {
+                        if (suggestion.action === "create-note") {
                             iconClass = "bx bx-plus";
+                        } else if (suggestion.action === "create-child-note") {
+                            iconClass = "bx bx-subdirectory-right";
                         }
                         iconElement.className = iconClass;
 

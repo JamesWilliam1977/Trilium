@@ -130,20 +130,23 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
 
     options.fastSearch = true;
 
+    // The inbox row holds the single slot above the results, so their positions are the same as
+    // before it existed; the child-note row sits with the other secondary actions at the bottom.
     if (length >= 1 && options.allowCreatingNotes) {
-        results = [
+        results = ([
             {
                 action: "create-note",
                 noteTitle: term,
                 highlightedNotePathTitle: t("note_autocomplete.create-note", { term })
-            } as Suggestion,
+            }
+        ] as Suggestion[]).concat(results, [
             {
                 action: "create-child-note",
                 noteTitle: term,
                 parentNoteId: activeNoteId || "root",
                 highlightedNotePathTitle: t("note_autocomplete.create-child-note", { term })
             } as Suggestion
-        ].concat(results);
+        ]);
     }
 
     if (length >= 1 && options.allowJumpToSearchNotes) {
@@ -362,8 +365,10 @@ function initNoteAutocomplete($el: JQuery<HTMLElement>, options?: Options) {
                         let iconClass = suggestion.icon ?? "bx bx-note";
                         if (suggestion.action === "search-notes") {
                             iconClass = "bx bx-search";
-                        } else if (suggestion.action === "create-note" || suggestion.action === "create-child-note") {
+                        } else if (suggestion.action === "create-note") {
                             iconClass = "bx bx-plus";
+                        } else if (suggestion.action === "create-child-note") {
+                            iconClass = "bx bx-subdirectory-right";
                         } else if (suggestion.action === "external-link") {
                             iconClass = "bx bx-link-external";
                         }
