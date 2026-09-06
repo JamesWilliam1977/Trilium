@@ -133,6 +133,15 @@ describe("note_autocomplete", () => {
             });
         });
 
+        it("omits the creation rows when the host cannot act on them", async () => {
+            server.get = vi.fn(async () => [
+                { noteTitle: "Foo", notePathTitle: "Root / Foo", notePath: "root/abc" }
+            ]) as typeof server.get;
+
+            const result = (await noteAutocomplete.autocompleteSourceForCKEditor("Foo", false)) as any[];
+            expect(result.map((r) => r.action)).toEqual([ undefined ]);
+        });
+
         it("falls back to empty name when notePathTitle is missing", async () => {
             server.get = vi.fn(async () => []) as typeof server.get;
             const result = (await noteAutocomplete.autocompleteSourceForCKEditor("X")) as any[];

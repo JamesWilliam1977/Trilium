@@ -83,7 +83,12 @@ export interface Options {
     isCommandPalette?: boolean;
 }
 
-async function autocompleteSourceForCKEditor(queryText: string) {
+/**
+ * Feeds a CKEditor mention. Creation entries are offered only where the editor's host component
+ * implements `createNoteForReferenceLink`, which is what `MentionCustomization` calls to act on
+ * them.
+ */
+async function autocompleteSourceForCKEditor(queryText: string, allowCreatingNotes = true) {
     return await new Promise<MentionFeedObjectItem[]>((res, rej) => {
         autocompleteSource(
             queryText,
@@ -104,7 +109,7 @@ async function autocompleteSourceForCKEditor(queryText: string) {
                 );
             },
             {
-                allowCreatingNotes: true
+                allowCreatingNotes
             }
         );
     });
